@@ -4,3 +4,5 @@ __pycache__/
 *.pkl
 .DS_Store
 review/REPORT-*.md
+scanner/config.json
+scanner/logs/
