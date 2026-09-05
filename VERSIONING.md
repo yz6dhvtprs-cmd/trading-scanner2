@@ -1,27 +1,20 @@
 # Versioning with git + GitHub (free)
 
-I could not run git from this session (the git call was approval-blocked),
-so history starts with you pasting the block below. After that, every change
-I make can be committed as a version and rolled back with `git log` / `git revert`.
+Status: repo initialized, `v0.1` committed (`1e32c3e`). Apple's git is broken
+on this machine (no Xcode CLI tools), so we version with `dulwich`
+(pure-Python git, in `.venv`): `python -m dulwich <cmd>`.
 
-## First-time setup (paste once)
-
-```bash
-cd /Users/vismaypatel/trading-indicators
-git init
-git add README.md universe/ strategies/ grading.md skill.md scanner/ \
-        backtest/ review/ INDICATORS.md VERSIONING.md .gitignore
-git commit -m "v0.1: universe, 3 strategies, backtest, skill, review loop"
-```
+## Push to GitHub (one-time, needs you)
 
 Create an empty FREE public repo on github.com (e.g. `trading-indicators`),
 then:
 
 ```bash
-git branch -M main
-git remote add origin https://github.com/<you>/trading-indicators.git
-git push -u origin main
+cd /Users/vismaypatel/trading-indicators
+.venv/bin/python -m dulwich push https://github.com/<you>/trading-indicators.git
 ```
+
+(Use a personal access token as password when prompted.)
 
 ## Ongoing convention
 
