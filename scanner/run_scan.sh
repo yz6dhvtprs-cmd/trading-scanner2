@@ -9,8 +9,17 @@ STAMP=$(date +%F)
 MODE=${1:-nightly}
 
 case "$MODE" in
+  nightly|premarket)
+    if ! python scanner/market_calendar.py > /dev/null 2>&1; then
+      echo "$(date +%F) $MODE skipped: market closed" \
+        >> "$PROJ/scanner/logs/$MODE-$STAMP.log" 2>&1
+      exit 0
+    fi
+    ;;
+esac
+case "$MODE" in
   nightly)
-    python scanner/scan.py --pool top50 --channels imessage \
+    python scanner/scan.py --pool top50 --intraday --channels imessage \
       >> "$PROJ/scanner/logs/nightly-$STAMP.log" 2>&1
     ;;
   premarket)

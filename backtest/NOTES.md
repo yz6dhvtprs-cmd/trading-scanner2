@@ -61,6 +61,22 @@ breakout-long -0.04 (n=3); pullback-short -0.30; retest-short -0.48.
 - Standing warning: test n=50 for primary is good, not huge; Saturday loop
   demotes on negative live last-20 per LOOP.md.
 
+## Confirm round (2026-09-07): MTF / RSI-range / MACD / hidden-div, additive
+
+Precedence per research: weekly bias > daily structure > strength (ADX/RSI) >
+trigger; EMA-stack agreement across TFs as the trend-structure read.
+- Base signals KEPT as-is. MTF-weekly: neutral on breakout, +0.01-0.02R on
+  pullback -> watchlist/score input, not a gate. RSI-range: no-op (current
+  zones already sit inside Cardwell bull range) -> documented, not added.
+- MACD: REJECTED as gate — train says harmful on pullback (-0.37R) while test
+  says helpful (+0.57R); violent disagreement = overfit risk.
+- Hidden divergence: pullback +0.28->+0.41R train AND +0.25->+0.37R test
+  (n=42/17, thin but agreeing) -> informational boost flag, revisit with data.
+- Stacking all confirms: n collapses to ~0. Never stack; flow, don't filter.
+- Two-tier flow live in scan.py: Stage-0 9-MA alignment watchlist (logged to
+  watchlist.csv, iMessage digest) -> Stage-1 base signals with confirm flags
+  (M/R/D/X) + live D/1h/15m stack votes (live-only; 15m too short to backtest).
+
 ## Standing rules (from grading.md, confirmed)
 
 - <8 test trades -> B (thin), never promoted by win rate.

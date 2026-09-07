@@ -52,3 +52,5 @@ Automation permission once.
 - Saturday review is already scheduled (10:15 AM, in-app).
 - Keep it paper until `signal_log.csv` holds 20+ closed trades with live
   expectancy ≥ 0 — the Saturday loop enforces this, not willpower.
+- Market holidays/weekends: nightly and pre-market runs self-skip
+  (`scanner/market_calendar.py` — NYSE calendar); no texts on closed days.
