@@ -35,7 +35,11 @@ case "$MODE" in
     ;;
   bootstrap)
     python scanner/notify.py --channel imessage \
-      --message "Trading system online after login ($(date '+%F %H:%M')). Jobs: nightly 2:05pm, premarket 6:05am, Sat review 10:15am." \
+      --message "Trading system online after login ($(date '+%F %H:%M')). Jobs: intraday 10m, nightly 2:05pm, premarket 6:05am, Sat review 10:15am." \
       >> "$PROJ/scanner/logs/bootstrap-$STAMP.log" 2>&1
+    ;;
+  intraday)
+    python scanner/intraday.py --channels imessage \
+      >> "$PROJ/scanner/logs/intraday-$STAMP.log" 2>&1
     ;;
 esac
