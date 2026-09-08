@@ -227,21 +227,41 @@ def main() -> int:
         return f" D/{v.get('D','?')} 1h/{v.get('1h','?')} 15m/{v.get('15m','?')}" \
             if v else ""
 
-    # Stage 0 digest first: the potential-trade list
+    # Stage 0 digest: change-only. Full list always logged; the text carries
+    # only NEW/DROPPED names vs the previous session (first run sends full).
+    WLPATH = os.path.join(ROOT, "scanner", "watchlist.csv")
+    prev = set()
+    if os.path.exists(WLPATH):
+        old = pd.read_csv(WLPATH)
+        if len(old):
+            prev = set(old[old["date"] == old["date"].max()]["ticker"])
     if watch:
-        wl = sorted(watch, key=lambda w: -w["adx"])[:20]
-        wmsg = ("WATCH " + f"({len(watch)} names, align>={a.align_min}): " +
-                "; ".join(f"{w['ticker']}{w['dir']}{w['agree']}"
-                           f"{tag(w['ticker'])}" for w in wl))
-        print(wmsg)
-        for res in alert(wmsg, chans, cfg, title="Watchlist"):
-            print("  ", res)
         pd.DataFrame([{"date": dt.date.today().isoformat(), **w}
                       for w in watch]).to_csv(
-            os.path.join(ROOT, "scanner", "watchlist.csv"), mode="a",
-            header=not os.path.exists(os.path.join(ROOT, "scanner",
-                                                   "watchlist.csv")),
-            index=False)
+            WLPATH, mode="a", header=not os.path.exists(WLPATH), index=False)
+        cur = {w["ticker"] for w in watch}
+        new, dropped = sorted(cur - prev), sorted(prev - cur)
+        if prev and not new and not dropped:
+            print(f"WATCH unchanged ({len(cur)} names, logged, no text)",
+                  flush=True)
+        else:
+            wl = sorted(watch, key=lambda w: -w["adx"])
+            if not prev:
+                body = "; ".join(f"{w['ticker']}{w['dir']}{w['agree']}"
+                                 f"{tag(w['ticker'])}" for w in wl[:20])
+                wmsg = f"WATCH baseline ({len(wl)} names): {body}"
+            else:
+                parts = []
+                if new:
+                    parts.append("NEW " + ", ".join(
+                        f"{w['ticker']}{w['dir']}" for w in wl
+                        if w["ticker"] in set(new)))
+                if dropped:
+                    parts.append("DROPPED " + ", ".join(dropped))
+                wmsg = f"WATCH delta: {'; '.join(parts)} ({len(cur)} tracked)"
+            print(wmsg, flush=True)
+            for res in alert(wmsg, chans, cfg, title="Watchlist"):
+                print("  ", res)
 
     for r in rows:
         msg = (f"[{r['grade']}] {r['ticker']} {r['side'].upper()} "

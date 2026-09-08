@@ -116,8 +116,8 @@ def main() -> int:
         state[key] = True
         fired.append(key)
 
-    # 1. approach: watchlist names near 20d high (daily level via 15m window proxy:
-    #    use highest high of available 15m bars as the micro-level)
+    # 1. approach / stand-down: watchlist names near 20d high (micro-level =
+    #    highest high of available 15m bars). Each transition texts once.
     for _, w in wl.iterrows():
         t = w["ticker"]
         if t not in bars or w["dir"] != "UP":
@@ -125,10 +125,16 @@ def main() -> int:
         h = bars[t]
         lvl = float(h["High"].max())
         last = float(h["Close"].iloc[-1])
-        if 0 < (lvl - last) / lvl <= 0.005:
+        gap = (lvl - last) / lvl
+        if 0 < gap <= 0.005:
             once(f"approach:{t}",
                  f"APPROACH {t}: {last:.2f} within 0.5% of intraday high "
                  f"{lvl:.2f} — breakout trigger arming", t)
+        elif gap > 0.01 and f"approach:{t}" in state:
+            del state[f"approach:{t}"]
+            once(f"standdown:{t}:{lvl:.2f}",
+                 f"STAND DOWN {t}: faded to {last:.2f} "
+                 f"({gap * 100:.1f}% under {lvl:.2f}) — trigger off", t)
 
     # 2. open paper signals
     for idx, r in open_tr.iterrows():
@@ -139,7 +145,15 @@ def main() -> int:
         d = 1 if r["side"] == "long" else -1
         entry, stop = float(r["entry"]), float(r["stop"])
         if r["status"] in ("TRIGGERED", "CONFIRMED"):
-            if (last >= entry) if d == 1 else (last <= entry):
+            # pre-entry invalidation first: stop touched before entry fills
+            dead = (last <= stop) if d == 1 else (last >= stop)
+            if dead:
+                log.at[idx, "status"] = "INVALIDATED"
+                log.at[idx, "exit_reason"] = "pre-entry stop touch"
+                once(f"invalid:{t}:{r['date']}",
+                     f"INVALIDATED {t}: stop {stop} touched before entry "
+                     f"(last {last:.2f}) — setup dead, no trade", t)
+            elif (last >= entry) if d == 1 else (last <= entry):
                 log.at[idx, "status"] = "ENTERED"
                 log.at[idx, "entry"] = round(last, 2)
                 once(f"entered:{t}:{r['date']}",
