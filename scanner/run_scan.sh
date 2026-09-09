@@ -50,4 +50,8 @@ case "$MODE" in
     python scanner/analyze.py --channels imessage \
       >> "$PROJ/scanner/logs/analyze-$STAMP.log" 2>&1
     ;;
+  inbox)
+    python scanner/inbox.py --channels imessage \
+      >> "$PROJ/scanner/logs/inbox-$STAMP.log" 2>&1
+    ;;
 esac
