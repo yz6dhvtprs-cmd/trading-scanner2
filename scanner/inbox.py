@@ -80,19 +80,64 @@ def drop_list(cfg: dict, num: str):
     cfg.setdefault("blocked", {})[num] = dt.date.today().isoformat()
 
 
+def blob_text(blob) -> str:
+    """RCS bodies often live in attributedBody (text column NULL). The blob
+    is a binary plist wrapping an archiver stream; command keywords survive
+    as plain ASCII — extract uppercase words."""
+    import re
+    if not blob:
+        return ""
+    try:
+        s = bytes(blob).decode("utf-8", "ignore")
+    except Exception:
+        return ""
+    words = re.findall(r"[A-Z]{3,}(?: [A-Z0-9]+)?", s)
+    for w in words:
+        if w.split()[0] in ("SUBSCRIBE", "PAUSE", "RESUME", "UNSUBSCRIBE",
+                             "START", "STOP"):
+            return w
+    return ""
+
+
 def fresh_inbound(since_rowid: int) -> list:
-    """(rowid, sender, body, service) for inbound texts after since_rowid."""
+    """(rowid, sender, body, service) for inbound texts after since_rowid,
+    plus a sweep of the last 2h for missed COMMAND texts (cursor may have
+    been set past them). RCS bodies fall back to attributedBody."""
+    import time
+    cutoff_ns = int((time.time() - 2 * 3600 - COCOA) * 1e9)
     uri = f"file:{CHATDB}?mode=ro"
     con = sqlite3.connect(uri, uri=True, timeout=10)
     try:
         rows = con.execute(
-            "SELECT m.ROWID, h.id, m.text, m.service FROM message m "
-            "JOIN handle h ON m.handle_id = h.ROWID "
-            "WHERE m.ROWID > ? AND m.is_from_me = 0 AND m.text IS NOT NULL "
+            "SELECT m.ROWID, h.id, m.text, m.service, m.attributedBody "
+            "FROM message m JOIN handle h ON m.handle_id = h.ROWID "
+            "WHERE m.ROWID > ? AND m.is_from_me = 0 "
             "ORDER BY m.ROWID", (since_rowid,)).fetchall()
+        sweep = con.execute(
+            "SELECT m.ROWID, h.id, m.text, m.service, m.attributedBody "
+            "FROM message m JOIN handle h ON m.handle_id = h.ROWID "
+            "WHERE m.is_from_me = 0 AND m.date > ? "
+            "ORDER BY m.ROWID DESC LIMIT 200", (cutoff_ns,)).fetchall()
     finally:
         con.close()
-    return [(r, s, (b or "").strip(), (svc or "")) for r, s, b, svc in rows]
+
+    def body_of(b, blob):
+        b = (b or "").strip()
+        return b if b else blob_text(blob)
+
+    out = [(r, s, body_of(b, blob), (svc or "")) for r, s, b, svc, blob in rows
+           if body_of(b, blob)]
+    seen = {r for r, _, _, _ in out}
+    for r, s, b, svc, blob in sweep:
+        body = body_of(b, blob)
+        if not body or r in seen:
+            continue
+        first = body.upper().split()[0] if body.strip() else ""
+        if first in ("SUBSCRIBE", "PAUSE", "RESUME", "UNSUBSCRIBE", "START",
+                     "STOP"):
+            out.append((r, s, body, (svc or "")))
+            seen.add(r)
+    return sorted(out)
 
 
 def main() -> int:
@@ -119,10 +164,22 @@ def main() -> int:
     cfg = load_config()
     paused = cfg.get("paused", {})
     today = dt.date.today().isoformat()
+    import time as _t
+    now_ep = _t.time()
+    _d = st.get("done", {})
+    done = {k: 0 for k in _d} if isinstance(_d, list) else dict(_d)
+    seen_run = set()
     for rowid, sender, body, svc in msgs:
         sender = norm(sender)
         if not body:
             continue
+        cmd_key = f"{sender}|{body.upper()}"
+        if cmd_key in seen_run:
+            continue  # carrier duplicate rows in one run
+        seen_run.add(cmd_key)
+        if cmd_key in done and now_ep - done[cmd_key] < 24 * 3600:
+            continue  # handled within 24h: no duplicate confirmations
+        done[cmd_key] = now_ep
         parts = body.upper().split()
         cmd, arg = parts[0], (parts[1] if len(parts) > 1 else "")
         svc_in = "SMS" if "sms" in svc.lower() else "iMessage"
@@ -159,18 +216,25 @@ def main() -> int:
         elif cmd == "UNSUBSCRIBE":
             drop_list(cfg, sender)
             paused.pop(sender, None)
+            for k in [k for k in done if k.startswith(sender + "|")]:
+                del done[k]  # allow a future SUBSCRIBE through
             reply = "Unsubscribed. Text SUBSCRIBE to rejoin."
         if reply:
             print(f"inbox: {sender} -> {cmd} ({svc_in})", flush=True)
             if not dry:
-                print("  ", _send_via(sender, reply, rsvc), flush=True)
+                res = _send_via(sender, reply, rsvc)
+                print("  ", res, flush=True)
+                if "FAILED" in res and rsvc == "iMessage":
+                    res2 = _send_via(sender, reply, "SMS")
+                    print("   fallback:", res2, flush=True)
             else:
                 print(f"   dry: would reply via {rsvc}", flush=True)
     cfg["paused"] = {k: v for k, v in paused.items() if v >= today}
     save_config(cfg)
     if msgs:
         st["last_rowid"] = max(r for r, _, _, _ in msgs)
-        json.dump(st, open(ISTATE, "w"))
+    st["done"] = dict(sorted(done.items(), key=lambda kv: -kv[1])[:200])
+    json.dump(st, open(ISTATE, "w"))
     print(f"inbox poll {dt.datetime.now().strftime('%H:%M')}: "
           f"{len(msgs)} new inbound", flush=True)
     return 0
