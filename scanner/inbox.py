@@ -25,6 +25,19 @@ from notify import _recipients, _send_via, load_config  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG = os.path.join(ROOT, "scanner", "config.json")
 ISTATE = os.path.join(ROOT, "scanner", "inbox_state.json")
+
+
+def norm(num: str) -> str:
+    """Handle-id formats vary (+1906…, 1906…, emails) -> canonical E.164-ish."""
+    n = num.strip()
+    if "@" in n:
+        return n.lower()
+    d = "".join(c for c in n if c.isdigit())
+    if len(d) == 10:
+        return "+1" + d
+    if len(d) == 11 and d.startswith("1"):
+        return "+" + d
+    return n if n.startswith("+") else ("+" + d if d else n)
 CHATDB = os.path.expanduser("~/Library/Messages/chat.db")
 # Cocoa epoch (2001-01-01) -> Unix epoch offset, nanoseconds
 COCOA = 978307200
@@ -107,6 +120,7 @@ def main() -> int:
     paused = cfg.get("paused", {})
     today = dt.date.today().isoformat()
     for rowid, sender, body, svc in msgs:
+        sender = norm(sender)
         if not body:
             continue
         parts = body.upper().split()
