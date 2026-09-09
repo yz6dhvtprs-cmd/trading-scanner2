@@ -20,9 +20,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "backtest"))
 from combos import add_features  # noqa: E402
 from indicators2 import add_extra, alignment  # noqa: E402
+from notify import alert, load_config  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WATCH = os.path.join(ROOT, "scanner", "agent_watch.json")
+TOP10 = os.path.join(ROOT, "scanner", "top10_state.json")
 MAXN = 25
 
 
@@ -45,7 +47,7 @@ def confidence(f) -> tuple:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--channels", default="dry")
-    ap.parse_args()
+    a = ap.parse_args()
     import yfinance as yf
     tickers = pd.read_csv(os.path.join(
         ROOT, "universe", "universe_live.csv"))["ticker"].tolist()
@@ -59,11 +61,16 @@ def main() -> int:
             if len(h) < 225:
                 continue
             f = add_extra(add_features(h))
-            c, d, a = confidence(f)
-            scored[t] = {"conf": c, "dir": d, "adx": a,
+            c, d, av = confidence(f)
+            scored[t] = {"conf": c, "dir": d, "adx": av,
                          "updated": dt.date.today().isoformat()}
         except Exception:
             continue
+    if len(scored) < 10:
+        # fetch failure (rate limit/outage): NEVER overwrite state with junk
+        print(f"screen ABORTED: only {len(scored)} tickers scored; "
+              f"watchlist untouched", flush=True)
+        return 1
     top = dict(sorted(scored.items(), key=lambda kv: -kv[1]["conf"])[:MAXN])
     prev = {}
     if os.path.exists(WATCH):
@@ -73,6 +80,25 @@ def main() -> int:
     json.dump(top, open(WATCH, "w"), indent=1)
     print(f"screened {len(scored)} -> watch {len(top)} | "
           f"NEW {new} | KICKED {kicked}", flush=True)
+
+    # Top-10 single text: first run of the day, or membership changed.
+    # Order shuffles alone don't text (hourly rank noise).
+    ranked = sorted(top.items(), key=lambda kv: -kv[1]["conf"])
+    top10 = [t for t, _ in ranked[:10]]
+    st = json.load(open(TOP10)) if os.path.exists(TOP10) else {}
+    today = dt.date.today().isoformat()
+    if st.get("date") != today or set(st.get("top10", [])) != set(top10):
+        body = ", ".join(f"{t}{top[t]['dir']}" for t in top10)
+        msg = (f"TOP10 {dt.datetime.now().strftime('%H:%M')}PT: {body}")
+        print(msg, flush=True)
+        cfg = load_config()
+        for res in alert(msg, [c.strip()
+                               for c in a.channels.split(",")], cfg,
+                         title="Top 10 trends"):
+            print("  ", res, flush=True)
+        json.dump({"date": today, "top10": top10}, open(TOP10, "w"))
+    else:
+        print("TOP10 unchanged, no text", flush=True)
     return 0
 
 
