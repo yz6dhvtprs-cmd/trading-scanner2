@@ -230,11 +230,14 @@ def main() -> int:
             else:
                 print(f"   dry: would reply via {rsvc}", flush=True)
     cfg["paused"] = {k: v for k, v in paused.items() if v >= today}
-    save_config(cfg)
-    if msgs:
-        st["last_rowid"] = max(r for r, _, _, _ in msgs)
-    st["done"] = dict(sorted(done.items(), key=lambda kv: -kv[1])[:200])
-    json.dump(st, open(ISTATE, "w"))
+    if not dry:
+        save_config(cfg)
+        if msgs:
+            st["last_rowid"] = max(r for r, _, _, _ in msgs)
+        st["done"] = dict(sorted(done.items(), key=lambda kv: -kv[1])[:200])
+        json.dump(st, open(ISTATE, "w"))
+    else:
+        print("dry: state/config untouched", flush=True)
     print(f"inbox poll {dt.datetime.now().strftime('%H:%M')}: "
           f"{len(msgs)} new inbound", flush=True)
     return 0
