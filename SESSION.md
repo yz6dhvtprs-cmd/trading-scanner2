@@ -69,4 +69,15 @@ Never overwrite state on fetch failure (guard in screen.py).
   > approach texts (no edge, arming only) > intraday entries (paper-proving).
 - **Commits**: v0.1 SP500+algo · docs · v0.2 scan/alerts · v0.3 holiday+two-tier ·
   v0.4 intraday · v0.5 change-only · v0.6 gap fixes · v0.7 two agents+AV ·
-  v0.8 top-10+guard · v0.9 inbox commands. GitHub has v0.1–v0.2 only.
+  v0.8 top-10+guard · v0.9 inbox commands · v0.10 analyzer evidence ·
+  smart-routing/geo-fence/dedupe fixes · sub.py admin CLI · GRADES.md.
+  All pushed; GitHub current.
+- **Inbox hardening log**: RCS blob bodies decoded; 2h missed-command sweep
+  (stale rows can PAUSE/RESUME/UNSUBSCRIBE but never SUBSCRIBE — no
+  resurrection); per-sender last-text-wins; 10-min idempotency with
+  state-aware replies ("Already subscribed/paused/active"); dry runs pure
+  (no state writes); non-+1 senders silently ignored; re-SUBSCRIBE lifts pause.
+- **Routing rule**: inbound any transport (RCS/iMessage/SMS); outbound SMS
+  default with delivery-verify + iMessage fallback. Subscriber admin via
+  `scanner/sub.py` (list/add/remove/pause/resume); never hand-edit config.json.
+- **Grades for subscribers**: `GRADES.md` — A/A+/B+/B/C in plain language.
