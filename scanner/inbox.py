@@ -175,6 +175,8 @@ def main() -> int:
         sender = norm(sender)
         if not body:
             continue
+        if not sender.startswith("+1"):
+            continue  # geo-fence: non-NANP senders get zero response
         if body.upper().split()[0] == "SUBSCRIBE" and not fresh:
             continue  # stale sweep find: never resurrect on old texts
         cmd_key = f"{sender}|{body.upper()}"
