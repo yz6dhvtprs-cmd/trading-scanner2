@@ -202,8 +202,11 @@ def main() -> int:
         cur = in_list(cfg, sender)
         today = dt.date.today().isoformat()
         if cmd == "SUBSCRIBE" and cur:
+            was_paused = paused.pop(sender, None)
             reply, rsvc = (f"Already subscribed via SMS. "
                            f"PAUSE pauses a day, UNSUBSCRIBE stops all."), "SMS"
+            if was_paused:
+                reply = f"Welcome back — pause lifted, alerts on. {reply}"
             top = []
             try:
                 st10 = json.load(open(os.path.join(
