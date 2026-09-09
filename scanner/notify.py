@@ -102,7 +102,7 @@ def alert(text: str, channels: list, cfg: dict,
             results.append(send_telegram(cfg["tg_token"], cfg["tg_chat"], text))
         elif ch == "mac":
             results.append(mac_notify(title, text[:150]))
-        elif ch == "imessage":
+        elif ch in ("imessage", "sms"):
             import datetime as _dt
             paused = cfg.get("paused", {})
             now = _dt.date.today().isoformat()

@@ -47,9 +47,21 @@ Automation permission once.
 
 ## Scheduling (free, on this Mac)
 
-- Pre-market gate, weekdays ~9:00 ET: add a `launchd` agent or cron entry
-  running `scan.py --mode premarket --channels telegram`.
-- Saturday review is already scheduled (10:15 AM, in-app).
+Live agents (all in `~/Library/LaunchAgents/com.trade.*.plist`, auto-start at
+login): intraday 10m · screen hourly :20 · analyze 15m · premarket 6:05am ·
+nightly 2:05pm · saturday 10:15am · inbox 5m · bootstrap login ping.
+
+## Operations (run in your Terminal to see live status)
+
+```bash
+launchctl list | grep trade   # agents loaded? (PID "-" + 0 = armed, idle)
+tail -5 scanner/logs/inbox-$(date +%F).log    # inbox polls + commands seen
+tail -5 scanner/logs/analyze-$(date +%F).log  # analyzer output
+# manual inbox check + send path (use --channels sms; dry sends nothing):
+python scanner/inbox.py --channels sms
+python scanner/notify.py --channel sms --to me --message "test"
+```
+
 - Keep it paper until `signal_log.csv` holds 20+ closed trades with live
   expectancy ≥ 0 — the Saturday loop enforces this, not willpower.
 - Market holidays/weekends: nightly and pre-market runs self-skip
