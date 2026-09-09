@@ -182,11 +182,11 @@ def main() -> int:
         done[cmd_key] = now_ep
         parts = body.upper().split()
         cmd, arg = parts[0], (parts[1] if len(parts) > 1 else "")
-        svc_in = "SMS" if "sms" in svc.lower() else "iMessage"
+        # house rule: everything goes out as SMS; IMESSAGE only on explicit ask
+        svc_in = "iMessage" if arg == "IMESSAGE" else "SMS"
         reply, rsvc = None, svc_in
         if cmd == "SUBSCRIBE":
-            want = "SMS" if arg == "SMS" else "iMessage" if arg == "IMESSAGE" \
-                else svc_in
+            want = "iMessage" if arg == "IMESSAGE" else "SMS"
             if cfg.get("blocked", {}).pop(sender, None) is not None:
                 pass  # re-subscribe clears the block
             set_list(cfg, sender, want)
