@@ -80,12 +80,40 @@ def send_imessage(to: str, text: str) -> str:
     return _send_via(to, text, "iMessage")
 
 
-def send_smart(to: str, text: str) -> str:
-    """House rule: iMessage first, automatic SMS fallback on failure."""
-    res = _send_via(to, text, "iMessage")
+def send_smart(to: str, text: str, verify: bool = True,
+               wait_s: int = 20) -> str:
+    """House rule: SMS first, automatic iMessage fallback.
+    osascript exit-0 means 'accepted', NOT delivered — so unless verify is
+    off, we check chat.db for is_delivered and fire the iMessage copy when
+    the SMS never lands."""
+    res = _send_via(to, text, "SMS")
     if "FAILED" in res:
-        res = _send_via(to, text, "SMS")
-    return res
+        return _send_via(to, text, "iMessage") + " (SMS failed)"
+    if not verify:
+        return res
+    import time as _t
+    _t.sleep(wait_s)
+    try:
+        import sqlite3
+        digits = "".join(c for c in to if c.isdigit())[-10:]
+        uri = ("file:" + os.path.expanduser("~/Library/Messages/chat.db") +
+               "?mode=ro")
+        con = sqlite3.connect(uri, uri=True, timeout=10)
+        try:
+            row = con.execute(
+                "SELECT m.is_delivered, m.is_sent FROM message m "
+                "JOIN handle h ON m.handle_id = h.ROWID "
+                "WHERE m.is_from_me = 1 AND h.id LIKE ? "
+                "ORDER BY m.ROWID DESC LIMIT 1",
+                ("%" + digits,)).fetchone()
+        finally:
+            con.close()
+        if row and row[0]:
+            return res + " (delivered)"
+        res2 = _send_via(to, text, "iMessage")
+        return res + f" (undelivered; iMessage fallback: {res2})"
+    except Exception as e:
+        return res + f" (unverifiable: {e})"
 
 
 def run_shortcut(name: str, text: str) -> str:
