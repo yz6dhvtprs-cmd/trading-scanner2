@@ -125,17 +125,19 @@ def fresh_inbound(since_rowid: int) -> list:
         b = (b or "").strip()
         return b if b else blob_text(blob)
 
-    out = [(r, s, body_of(b, blob), (svc or "")) for r, s, b, svc, blob in rows
-           if body_of(b, blob)]
-    seen = {r for r, _, _, _ in out}
+    # fresh rows carry a flag; sweep rows are stale: they may PAUSE/RESUME/
+    # UNSUBSCRIBE (state that matters now) but never SUBSCRIBE (a stale
+    # SUBSCRIBE would resurrect unsubscribed/blocked numbers on every sweep).
+    out = [(r, s, body_of(b, blob), (svc or ""), True)
+           for r, s, b, svc, blob in rows if body_of(b, blob)]
+    seen = {r for r, _, _, _, _ in out}
     for r, s, b, svc, blob in sweep:
         body = body_of(b, blob)
         if not body or r in seen:
             continue
         first = body.upper().split()[0] if body.strip() else ""
-        if first in ("SUBSCRIBE", "PAUSE", "RESUME", "UNSUBSCRIBE", "START",
-                     "STOP"):
-            out.append((r, s, body, (svc or "")))
+        if first in ("PAUSE", "RESUME", "UNSUBSCRIBE", "STOP"):
+            out.append((r, s, body, (svc or ""), False))
             seen.add(r)
     return sorted(out)
 
@@ -169,10 +171,12 @@ def main() -> int:
     _d = st.get("done", {})
     done = {k: 0 for k in _d} if isinstance(_d, list) else dict(_d)
     seen_run = set()
-    for rowid, sender, body, svc in msgs:
+    for rowid, sender, body, svc, fresh in msgs:
         sender = norm(sender)
         if not body:
             continue
+        if body.upper().split()[0] == "SUBSCRIBE" and not fresh:
+            continue  # stale sweep find: never resurrect on old texts
         cmd_key = f"{sender}|{body.upper()}"
         if cmd_key in seen_run:
             continue  # carrier duplicate rows in one run
@@ -258,7 +262,7 @@ def main() -> int:
     if not dry:
         save_config(cfg)
         if msgs:
-            st["last_rowid"] = max(r for r, _, _, _ in msgs)
+            st["last_rowid"] = max(r for r, _, _, _, _ in msgs)
         st["done"] = dict(sorted(done.items(), key=lambda kv: -kv[1])[:200])
         json.dump(st, open(ISTATE, "w"))
     else:
