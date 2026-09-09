@@ -250,13 +250,10 @@ def main() -> int:
         if reply:
             print(f"inbox: {sender} -> {cmd} ({svc_in})", flush=True)
             if not dry:
-                res = _send_via(sender, reply, rsvc)
-                print("  ", res, flush=True)
-                if "FAILED" in res and rsvc == "iMessage":
-                    res2 = _send_via(sender, reply, "SMS")
-                    print("   fallback:", res2, flush=True)
+                from notify import send_smart as _smart
+                print("  ", _smart(sender, reply), flush=True)
             else:
-                print(f"   dry: would reply via {rsvc}", flush=True)
+                print("   dry: would smart-reply (iMessage->SMS)", flush=True)
     cfg["paused"] = {k: v for k, v in paused.items() if v >= today}
     if not dry:
         save_config(cfg)

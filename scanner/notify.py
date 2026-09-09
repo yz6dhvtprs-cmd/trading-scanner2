@@ -80,6 +80,14 @@ def send_imessage(to: str, text: str) -> str:
     return _send_via(to, text, "iMessage")
 
 
+def send_smart(to: str, text: str) -> str:
+    """House rule: iMessage first, automatic SMS fallback on failure."""
+    res = _send_via(to, text, "iMessage")
+    if "FAILED" in res:
+        res = _send_via(to, text, "SMS")
+    return res
+
+
 def run_shortcut(name: str, text: str) -> str:
     """Trigger a Mac Shortcut by name, passing the alert as input.
     Build once in Shortcuts.app: Receive Text input -> Send Message / Show
@@ -106,17 +114,17 @@ def alert(text: str, channels: list, cfg: dict,
             import datetime as _dt
             paused = cfg.get("paused", {})
             now = _dt.date.today().isoformat()
-            recips = _recipients(cfg)
+            numbers = sorted({d for d, _ in _recipients(cfg)})
             if only:
                 o = only.lower()
-                recips = [(d, s) for d, s in recips
-                          if o in d or o in subs.get(d, "").lower()]
-            recips = [(d, s) for d, s in recips
-                      if paused.get(d, "") < now or paused.get(d, "") == ""]
-            if not recips:
-                results.append("messages: not configured (need imsg_to/sms_to)")
-            for dest, svc in recips:
-                results.append(_send_via(dest, text, svc))
+                numbers = [d for d in numbers
+                           if o in d or o in subs.get(d, "").lower()]
+            numbers = [d for d in numbers
+                       if paused.get(d, "") < now or paused.get(d, "") == ""]
+            if not numbers:
+                results.append("messages: not configured (need subscribers)")
+            for dest in numbers:
+                results.append(send_smart(dest, text))
         elif ch.startswith("shortcut:"):
             results.append(run_shortcut(ch.split(":", 1)[1], text))
         elif ch == "dry":
