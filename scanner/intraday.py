@@ -116,26 +116,8 @@ def main() -> int:
         state[key] = True
         fired.append(key)
 
-    # 1. approach / stand-down: watchlist names near 20d high (micro-level =
-    #    highest high of available 15m bars). Each transition texts once.
-    for _, w in wl.iterrows():
-        t = w["ticker"]
-        if t not in bars or w["dir"] != "UP":
-            continue
-        h = bars[t]
-        lvl = float(h["High"].max())
-        last = float(h["Close"].iloc[-1])
-        gap = (lvl - last) / lvl
-        if 0 < gap <= 0.005:
-            once(f"approach:{t}",
-                 f"APPROACH {t}: {last:.2f} within 0.5% of intraday high "
-                 f"{lvl:.2f} — breakout trigger arming", t)
-        elif gap > 0.01 and f"approach:{t}" in state:
-            del state[f"approach:{t}"]
-            once(f"standdown:{t}:{lvl:.2f}",
-                 f"STAND DOWN {t}: faded to {last:.2f} "
-                 f"({gap * 100:.1f}% under {lvl:.2f}) — trigger off", t)
-
+    # 1. (retired): approach/stand-down texts removed — %-from-high notices
+    #    carry no direction. Proximity now only feeds the analyzer's states.
     # 2. open paper signals
     for idx, r in open_tr.iterrows():
         t = r["ticker"]
