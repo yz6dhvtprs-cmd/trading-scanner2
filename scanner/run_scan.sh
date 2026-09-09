@@ -42,4 +42,12 @@ case "$MODE" in
     python scanner/intraday.py --channels imessage \
       >> "$PROJ/scanner/logs/intraday-$STAMP.log" 2>&1
     ;;
+  screen)
+    python scanner/screen.py --channels imessage \
+      >> "$PROJ/scanner/logs/screen-$STAMP.log" 2>&1
+    ;;
+  analyze)
+    python scanner/analyze.py --channels imessage \
+      >> "$PROJ/scanner/logs/analyze-$STAMP.log" 2>&1
+    ;;
 esac
