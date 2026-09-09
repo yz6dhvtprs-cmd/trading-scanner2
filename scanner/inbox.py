@@ -177,15 +177,40 @@ def main() -> int:
         if cmd_key in seen_run:
             continue  # carrier duplicate rows in one run
         seen_run.add(cmd_key)
-        if cmd_key in done and now_ep - done[cmd_key] < 24 * 3600:
-            continue  # handled within 24h: no duplicate confirmations
+        if cmd_key in done and now_ep - done[cmd_key] < 600:
+            continue  # same text retried within 10 min: already answered
         done[cmd_key] = now_ep
         parts = body.upper().split()
         cmd, arg = parts[0], (parts[1] if len(parts) > 1 else "")
         # house rule: everything goes out as SMS; IMESSAGE only on explicit ask
         svc_in = "iMessage" if arg == "IMESSAGE" else "SMS"
         reply, rsvc = None, svc_in
-        if cmd == "SUBSCRIBE":
+        cur = in_list(cfg, sender)
+        today = dt.date.today().isoformat()
+        if cmd == "SUBSCRIBE" and cur:
+            reply, rsvc = (f"Already subscribed via {cur}. "
+                           f"PAUSE pauses a day, UNSUBSCRIBE stops all."), \
+                ("iMessage" if cur == "iMessage" else "SMS")
+            top = []
+            try:
+                st10 = json.load(open(os.path.join(
+                    ROOT, "scanner", "top10_state.json")))
+                w = json.load(open(os.path.join(
+                    ROOT, "scanner", "agent_watch.json")))
+                top = [f"{t}{w[t]['dir']}" for t in st10.get("top10", [])[:10]
+                       if t in w]
+            except Exception:
+                pass
+            if top:
+                reply += f" Current TOP10: {', '.join(top)}."
+        elif cmd == "PAUSE" and (paused.get(sender, "") or "") >= today:
+            reply, rsvc = (f"Already paused till {paused.get(sender)}. "
+                           f"RESUME restarts now."), "SMS"
+        elif cmd == "RESUME" and (paused.get(sender, "") or "") < today:
+            reply, rsvc = "Already active — alerts on.", "SMS"
+        elif cmd == "UNSUBSCRIBE" and not cur:
+            reply, rsvc = "Not subscribed — nothing to stop.", "SMS"
+        elif cmd == "SUBSCRIBE":
             want = "iMessage" if arg == "IMESSAGE" else "SMS"
             if cfg.get("blocked", {}).pop(sender, None) is not None:
                 pass  # re-subscribe clears the block
