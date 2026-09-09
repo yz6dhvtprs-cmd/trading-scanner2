@@ -226,16 +226,17 @@ def pooled(trades: list) -> dict:
 
 
 # ---------- driver ----------
-def load_frames(refresh: bool) -> dict:
-    if os.path.exists(CACHE) and not refresh:
-        print(f"loading cache {CACHE}", flush=True)
-        with open(CACHE, "rb") as f:
+def load_frames(refresh: bool, period: str = "5y",
+                cache: str = CACHE) -> dict:
+    if os.path.exists(cache) and not refresh:
+        print(f"loading cache {cache}", flush=True)
+        with open(cache, "rb") as f:
             return pickle.load(f)
     import yfinance as yf
     pool = pd.read_csv(SP500_URL)["Symbol"].str.replace(".", "-", regex=False)
     tickers = sorted(set(pool) - {"META"})
-    print(f"{len(tickers)} tickers, downloading 5y daily...", flush=True)
-    px = yf.download(tickers, period="5y", interval="1d", auto_adjust=True,
+    print(f"{len(tickers)} tickers, downloading {period} daily...", flush=True)
+    px = yf.download(tickers, period=period, interval="1d", auto_adjust=True,
                      progress=False, threads=True, group_by="ticker")
     frames = {}
     for t in tickers:
@@ -248,7 +249,7 @@ def load_frames(refresh: bool) -> dict:
         except Exception:
             continue
     print(f"cached {len(frames)} frames", flush=True)
-    with open(CACHE, "wb") as f:
+    with open(cache, "wb") as f:
         pickle.dump(frames, f)
     return frames
 
@@ -274,6 +275,8 @@ def parse_exit(spec: str) -> tuple:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--period", default="5y")
+    ap.add_argument("--cache", default=CACHE)
     ap.add_argument("--out", default="backtest/combos_r1.csv")
     ap.add_argument("--strategy", default="pullback,breakout,retest")
     ap.add_argument("--side", default="long,short")
@@ -289,7 +292,7 @@ def main() -> int:
         "exit": [parse_exit(x) for x in a.exit.split(",")],
     }
 
-    frames = load_frames(a.refresh)
+    frames = load_frames(a.refresh, a.period, a.cache)
     rows = []
     total = len(grid["strategy"]) * len(grid["side"]) * len(grid["adx_min"]) * \
         len(grid["exit"])

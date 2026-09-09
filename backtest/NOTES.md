@@ -77,6 +77,24 @@ trigger; EMA-stack agreement across TFs as the trend-structure read.
   watchlist.csv, iMessage digest) -> Stage-1 base signals with confirm flags
   (M/R/D/X) + live D/1h/15m stack votes (live-only; 15m too short to backtest).
 
+## Gap fixes (2026-09-08)
+
+- Gap 4 (n=50): 10y confirmation, primary only (combos_10y.csv, --period/--cache
+  flags added). trail3.0/adx20: train n=297 +0.16R / test n=98 +0.64R;
+  trail3.0/adx22: train n=202 +0.33R / test n=69 +0.52R. Edge holds across a
+  decade incl. 2020/2022; trailing beats fixed in all four cells. adx22 kept as
+  CHALLENGER (not promoted: switching on new data = selection; needs
+  Saturday-loop confirmation). Primary stays adx20.
+- Gap 5 (shorts): 10y bull/bear split (SPY vs SMA200; bear = 16% of days).
+  Shorts negative in BOTH regimes with real samples (pullback-short bear
+  train n=187 -0.74R; retest-short bear n=5187 -0.42R). Verdict: pattern
+  problem, not regime problem. Shorts stay paused; unpausing needs NEW short
+  patterns (breakdown-retest etc.), not regime conditioning.
+- Gap 1 (intraday): 60d/15m approach study, 94k micro-events: P(MFE>=2R)=35%,
+  mean cc +0.07R, direction coin-flip. Verdict: approach = volatility-armed
+  notice, zero standalone edge. Correctly tiered as watchlist info; never
+  graded. Real intraday validation = accumulating paper outcomes (auto-logged).
+
 ## Standing rules (from grading.md, confirmed)
 
 - <8 test trades -> B (thin), never promoted by win rate.
