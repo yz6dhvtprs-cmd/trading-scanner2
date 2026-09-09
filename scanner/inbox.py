@@ -120,8 +120,20 @@ def main() -> int:
                 pass  # re-subscribe clears the block
             set_list(cfg, sender, want)
             paused.pop(sender, None)
+            top = []
+            try:
+                st10 = json.load(open(os.path.join(
+                    ROOT, "scanner", "top10_state.json")))
+                w = json.load(open(os.path.join(
+                    ROOT, "scanner", "agent_watch.json")))
+                top = [f"{t}{w[t]['dir']}" for t in st10.get("top10", [])[:10]
+                       if t in w]
+            except Exception:
+                pass
             reply = (f"Subscribed to trade alerts via {want}. "
                      f"PAUSE pauses a day, UNSUBSCRIBE stops all.")
+            if top:
+                reply += f" Current TOP10: {', '.join(top)}."
             rsvc = want
         elif cmd == "PAUSE":
             paused[sender] = (dt.date.today() +
