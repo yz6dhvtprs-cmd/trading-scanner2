@@ -171,6 +171,8 @@ def main() -> int:
     if msgs:
         st["last_rowid"] = max(r for r, _, _, _ in msgs)
         json.dump(st, open(ISTATE, "w"))
+    print(f"inbox poll {dt.datetime.now().strftime('%H:%M')}: "
+          f"{len(msgs)} new inbound", flush=True)
     return 0
 
 
