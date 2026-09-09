@@ -186,15 +186,14 @@ def main() -> int:
         done[cmd_key] = now_ep
         parts = body.upper().split()
         cmd, arg = parts[0], (parts[1] if len(parts) > 1 else "")
-        # house rule: everything goes out as SMS; IMESSAGE only on explicit ask
-        svc_in = "iMessage" if arg == "IMESSAGE" else "SMS"
+        # house rule: inbound may be RCS/iMessage/SMS; outbound is ALWAYS SMS
+        svc_in = "SMS"
         reply, rsvc = None, svc_in
         cur = in_list(cfg, sender)
         today = dt.date.today().isoformat()
         if cmd == "SUBSCRIBE" and cur:
-            reply, rsvc = (f"Already subscribed via {cur}. "
-                           f"PAUSE pauses a day, UNSUBSCRIBE stops all."), \
-                ("iMessage" if cur == "iMessage" else "SMS")
+            reply, rsvc = (f"Already subscribed via SMS. "
+                           f"PAUSE pauses a day, UNSUBSCRIBE stops all."), "SMS"
             top = []
             try:
                 st10 = json.load(open(os.path.join(
@@ -215,7 +214,7 @@ def main() -> int:
         elif cmd == "UNSUBSCRIBE" and not cur:
             reply, rsvc = "Not subscribed — nothing to stop.", "SMS"
         elif cmd == "SUBSCRIBE":
-            want = "iMessage" if arg == "IMESSAGE" else "SMS"
+            want = "SMS"  # outbound is always SMS, no exceptions
             if cfg.get("blocked", {}).pop(sender, None) is not None:
                 pass  # re-subscribe clears the block
             set_list(cfg, sender, want)
