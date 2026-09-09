@@ -56,8 +56,63 @@ def fib_levels(hi: float, lo: float) -> dict:
     return {r: hi - d * r for r in (0.382, 0.5, 0.618)}
 
 
+def fib_targets(hi: float, lo: float, direction: int) -> dict:
+    """Bigger-swing objectives: extensions beyond the swing."""
+    d = hi - lo
+    if direction == 1:
+        return {"ext127": hi + d * 0.272, "ext162": hi + d * 0.618}
+    return {"ext127": lo - d * 0.272, "ext162": lo - d * 0.618}
+
+
 def near(price: float, level: float, tol: float = 0.003) -> bool:
     return abs(price - level) / level <= tol
+
+
+def swings(s: pd.Series, k: int = 5) -> tuple:
+    """Fractal swing highs/lows over the recent window."""
+    win = 2 * k + 1
+    hi = s["High"] if isinstance(s, pd.DataFrame) else None
+    return hi  # placeholder never used; see swing_levels
+
+
+def swing_levels(df: pd.DataFrame, lookback: int = 120, k: int = 5) -> tuple:
+    """Support/resistance from fractal swings + Fib + EMA/MA levels.
+    Returns (supports, resistances) sorted lists."""
+    w = df.iloc[-lookback:]
+    hi, lo = w["High"], w["Low"]
+    win = 2 * k + 1
+    ph = hi[(hi == hi.rolling(win, center=True).max())].dropna().tolist()
+    pl = lo[(lo == lo.rolling(win, center=True).min())].dropna().tolist()
+    shi, slo = float(hi.max()), float(lo.min())
+    fib = list(fib_levels(shi, slo).values())
+    dyn = [float(df[f"ema{n}"].iloc[-1]) for n in (21, 50, 200)
+           if f"ema{n}" in df.columns]
+    dyn += [float(df[f"sma{n}"].iloc[-1]) for n in (50, 200)
+            if f"sma{n}" in df.columns]
+    c = float(df["Close"].iloc[-1])
+    lvls = sorted(set(round(x, 2) for x in ph + pl + fib + dyn
+                      if np.isfinite(x)))
+    # merge duplicates within 0.5%
+    merged = []
+    for x in lvls:
+        if merged and abs(x - merged[-1]) / merged[-1] < 0.005:
+            merged[-1] = round((x + merged[-1]) / 2, 2)
+        else:
+            merged.append(x)
+    sup = [x for x in merged if x < c]
+    res = [x for x in merged if x > c]
+    return sup, res
+
+
+def tf_up(f: pd.DataFrame) -> str:
+    """Trend vote on any timeframe frame with Close/ema21/macd."""
+    try:
+        up = float(f["Close"].iloc[-1]) > float(f["ema21"].iloc[-1])
+        if "macd" in f.columns and np.isfinite(float(f["macd"].iloc[-1])):
+            up = up and float(f["macd"].iloc[-1]) > float(f["macd_sig"].iloc[-1])
+        return "UP" if up else "DN"
+    except Exception:
+        return "?"
 
 
 def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,

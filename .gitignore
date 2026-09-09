@@ -6,3 +6,6 @@ __pycache__/
 review/REPORT-*.md
 scanner/config.json
 scanner/logs/
+scanner/agent_watch.json
+scanner/*_state.json
+scanner/inbox_state.json
