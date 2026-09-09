@@ -171,6 +171,14 @@ def main() -> int:
     _d = st.get("done", {})
     done = {k: 0 for k in _d} if isinstance(_d, list) else dict(_d)
     seen_run = set()
+    # last-text-wins: only each sender's NEWEST command acts; older rows in
+    # the same burst are superseded, never replayed one by one.
+    latest = {}
+    for rowid, sender, body, svc, fresh in msgs:
+        s = norm(sender)
+        if body and (s not in latest or rowid > latest[s][0]):
+            latest[s] = (rowid, body, svc, fresh)
+    msgs = [(r, s, b, v, f) for s, (r, b, v, f) in latest.items()]
     for rowid, sender, body, svc, fresh in msgs:
         sender = norm(sender)
         if not body:
