@@ -1,0 +1,450 @@
+diff --git a/SESSION.md b/SESSION.md
+index 1639f13..4fecbcf 100644
+--- a/SESSION.md
++++ b/SESSION.md
+@@ -81,3 +81,9 @@ Never overwrite state on fetch failure (guard in screen.py).
+   default with delivery-verify + iMessage fallback. Subscriber admin via
+   `scanner/sub.py` (list/add/remove/pause/resume); never hand-edit config.json.
+ - **Grades for subscribers**: `GRADES.md` — A/A+/B+/B/C in plain language.
++- **Analyzer silence 2026-09-09**: the MTF gate shipped that morning demanded
++  D+1h agree with the *reversal* direction — impossible at fresh extremes, so
++  rejection/reversal never fired. Fixed: D+1h trend context + 15m-only
++  trigger, Long coexists with qualifiers, per-state change tracking
++  (`scanner/test_analyze.py` 6/6). RVOL 1.5 relaxation tested full-pool and
++  REJECTED by TEST lock (+0.54 train / −0.15 test); live stays 2.0.
+diff --git a/algo.json b/algo.json
+index ce22963..17dc945 100644
+--- a/algo.json
++++ b/algo.json
+@@ -19,4 +19,5 @@
+  "paused": ["all shorts (bull-regime starvation; grade C until bear-regime evidence)",
+             "retest variants (edge ~0; revisit with partials)"],
+  "selection_note": "ADX 20-22 + trail3.0 consistent across thresholds; ADX>=25 thins out and test degrades; ADX<20 fails TEST confirmation (overfit without the gate). Win rate ~30%: runners pay, not frequency.",
++ "live_note_2026-09-09": "RVOL 1.5 relaxation REJECTED by TEST lock (full S&P pool, breakout-long ADX20 trail3: rvol>=2.0 train +0.73/test +0.59 vs rvol>=1.5 train +0.54/test -0.15, n=137). Live rvol_min stays 2.0. Analyzer MTF fixed same day: rejection/reversal now use D+1h trend context with 15m-only trigger, multistate coexistence.",
+  "runs": ["backtest/combos_r1.csv", "backtest/combos_r2.csv"]}
+diff --git a/backtest/combos.py b/backtest/combos.py
+index bfea06b..fd5ce2e 100644
+--- a/backtest/combos.py
++++ b/backtest/combos.py
+@@ -83,7 +83,10 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
+ 
+ # ---------- vectorized signal masks ----------
+ def signal_mask(df: pd.DataFrame, strategy: str, side: int,
+-                adx_min: float) -> np.ndarray:
++                adx_min: float, rvol_min: float = 2.0) -> np.ndarray:
++    """rvol_min default 2.0 preserves all published backtest results; the
++    live scanner passes the algo.json value (2.0 — a 1.5 relaxation was
++    tested 2026-09-09 and failed TEST: +0.54 train / -0.15 test)."""
+     bull = df["bull"].to_numpy()
+     adx_ok = np.ones(len(df), dtype=bool) if adx_min <= 0 else \
+         (df["adx"].to_numpy() >= adx_min)
+@@ -103,10 +106,10 @@ def signal_mask(df: pd.DataFrame, strategy: str, side: int,
+     elif strategy == "breakout":
+         rv = df["rvol"].to_numpy()
+         if side == 1:
+-            m = (c > df["hi20"].to_numpy()) & (rv >= 2.0) & (r >= 50) & \
++            m = (c > df["hi20"].to_numpy()) & (rv >= rvol_min) & (r >= 50) & \
+                 (r <= 67) & bull
+         else:
+-            m = (c < df["lo20"].to_numpy()) & (rv >= 2.0) & (r >= 33) & \
++            m = (c < df["lo20"].to_numpy()) & (rv >= rvol_min) & (r >= 33) & \
+                 (r <= 50) & (~bull)
+     else:  # retest
+         if side == 1:
+diff --git a/scanner/analyze.py b/scanner/analyze.py
+index cb3fa1f..e3be607 100644
+--- a/scanner/analyze.py
++++ b/scanner/analyze.py
+@@ -2,10 +2,15 @@
+ 
+ Usage: python scanner/analyze.py --channels dry
+ Reads scanner/agent_watch.json (<=25). Pulls daily + 1h + 15m per ticker.
+-States: LONG / SHORT / REVERSAL? (possible upcoming reversal) /
+-        REJECT? (possible upcoming rejection at level).
+-Combined message covers only tickers whose state CHANGED since last run
+-(scanner/agent_state.json). Format matches the ops template exactly.
++States (a ticker holds all that qualify — Long coexists with reversal /
++rejection): LONG / REVERSAL? (possible upcoming reversal) /
++REJECT? (possible upcoming rejection at level). No SHORT leg: shorts are
++paused per algo.json, so counter-trend reads stay "possible" qualifiers.
++Mean-reversion gates: trend context on daily+1h, trigger ONLY on the 15m
++flip (rejection = D+1h UP with 15m DN at resistance; reversal mirrors).
++Combined message covers only states that are NEW or CHANGED since last run
++(scanner/agent_state.json maps ticker -> {state: note}). Format matches
++the ops template exactly.
+ """
+ from __future__ import annotations
+ 
+@@ -27,6 +32,27 @@ from notify import alert, load_config  # noqa: E402
+ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ WATCH = os.path.join(ROOT, "scanner", "agent_watch.json")
+ STATE = os.path.join(ROOT, "scanner", "agent_state.json")
++# Live breakout RVOL (algo.json). Stays 2.0: a 1.5 relaxation was tested
++# 2026-09-09 full-pool and failed TEST (+0.54 train / -0.15 test, n=137).
++RVOL_MIN = 2.0
++
++
++def _load_state() -> dict:
++    """ticker -> {state: note}. Migrates the pre-multistate format
++    (ticker -> {"state": s, "note": n}); a "-" state migrates to {} so a
++    returning state re-alerts."""
++    if not os.path.exists(STATE):
++        return {}
++    raw = json.load(open(STATE))
++    out = {}
++    for t, v in raw.items():
++        if isinstance(v, dict) and "state" in v and "note" in v:
++            out[t] = {} if v["state"] == "-" else {v["state"]: v["note"]}
++        elif isinstance(v, dict):
++            out[t] = dict(v)
++        else:
++            out[t] = {}
++    return out
+ 
+ 
+ def flat(h):
+@@ -120,10 +146,13 @@ def tf_up(f: pd.DataFrame) -> str:
+ 
+ 
+ def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
+-            m15: pd.DataFrame) -> dict:
+-    """Every returned state carries direction + entry + S/R target + stop.
++            m15: pd.DataFrame) -> list:
++    """All qualified states for one ticker (Long coexists with reversal /
++    rejection — a new qualifier alerts even when Long already fired).
++    Every returned state carries direction + entry + S/R target + stop.
+     Base-signal stops stay risk-based (validated); everything else reads off
+     support/resistance + Fib + EMA/MA levels on daily and 1h."""
++    out = []
+     i = len(d) - 1
+     c = float(d["Close"].iloc[i])
+     hi20 = float(d["hi20"].iloc[i])
+@@ -145,54 +174,68 @@ def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
+             ext = fib_targets(hi20, lo20, -1)
+         return tgt, ext
+ 
+-    # 1. base signals first (never replaced; stops stay validated risk-based)
+-    for sname, dd, label in (("breakout", 1, "Long"), ("pullback", 1, "Long")):
+-        if signal_mask(d, sname, dd, 20.0)[i]:
+-            risk = risk_of(d, sname, dd, i)
++    # 1. base signals first (at most one Long; breakout has priority).
++    # Stops stay validated risk-based; RVOL uses the live relaxation.
++    for sname in ("breakout", "pullback"):
++        if signal_mask(d, sname, 1, 20.0, RVOL_MIN)[i]:
++            risk = risk_of(d, sname, 1, i)
+             stop = c - risk
+             tgt, ext = objective(1)
+             tgt_txt = f"{tgt:.2f}" if tgt else f"+3R {(c + 3 * risk):.2f}"
+-            return {"state": label, "price": round(c, 2),
+-                    "target": f"{tgt_txt} (trail; fib-ext {ext['ext162']:.2f})",
+-                    "stop": round(stop, 2),
+-                    "note": f"{sname} trigger " + _votes(votes)}
+-    # MTF gate for new states: daily + 1h must agree with the call direction.
+-    up_ok = votes["D"] == "UP" and votes["1h"] == "UP"
+-    dn_ok = votes["D"] == "DN" and votes["1h"] == "DN"
+-    # 2. rejection (short bias): at 20d-high / Fib / resistance + weak candle
++            out.append({"state": "Long", "price": round(c, 2),
++                        "target": f"{tgt_txt} (trail; fib-ext "
++                                  f"{ext['ext162']:.2f})",
++                        "stop": round(stop, 2),
++                        "note": f"{sname} trigger " + _votes(votes)})
++            break
++    # MTF: trend context on daily+1h, trigger ONLY on the 15m flip.
++    # Rejection = already up (D+1h UP) but 15m rolling over at resistance;
++    # reversal mirrors (D+1h DN, 15m turning up at support).
++    up_ctx = votes["D"] == "UP" and votes["1h"] == "UP"
++    dn_ctx = votes["D"] == "DN" and votes["1h"] == "DN"
++    m15_dn = votes["15m"] == "DN"
++    m15_up = votes["15m"] == "UP"
++    # 2. rejection (short bias): 20d-high / Fib / resistance + weak candle
+     levels = [("20d-high", hi20)] + [(f"fib{r}", v) for r, v in fib.items()]
++    if res:
++        levels.append(("resist", min(res)))
+     bear_pat = bool(pats & set(BEAR_PAT))
+     for name, lvl in levels:
+-        if near(c, lvl, ZONE_TOL) and bear_pat and rsi > 55 and dn_ok:
++        if near(c, lvl, ZONE_TOL) and bear_pat and rsi > 55 and up_ctx \
++                and m15_dn:
+             tgt, ext = objective(-1)
+             tgt_txt = f"{tgt:.2f}" if tgt else f"{ext['ext162']:.2f}"
+             rr = (c - float(tgt_txt)) / (lvl * 1.005 - c) \
+                 if lvl * 1.005 > c else 0
+             if rr < 1.0:
+                 continue
+-            return {"state": "Possible upcoming Rejection",
+-                    "price": round(c, 2), "target": tgt_txt,
+-                    "stop": round(lvl * 1.005, 2),
+-                    "note": f"{sorted(pats & set(BEAR_PAT))[0]} at {name} "
+-                            f"{lvl:.2f} " + _votes(votes)}
+-    # 3. reversal (long bias): at 20d-low / Fib / support + hammer + washed out
++            out.append({"state": "Possible upcoming Rejection",
++                        "price": round(c, 2), "target": tgt_txt,
++                        "stop": round(lvl * 1.005, 2),
++                        "note": f"{sorted(pats & set(BEAR_PAT))[0]} at {name} "
++                                f"{lvl:.2f} " + _votes(votes)})
++            break
++    # 3. reversal (long bias): 20d-low / Fib / support + hammer + washed out
+     bull_pat = bool(pats & set(BULL_PAT))
+-    for name, lvl in [("20d-low", lo20)] + [(f"fib{r}", v)
+-                                            for r, v in fib.items()]:
+-        if near(c, lvl, ZONE_TOL) and bull_pat and rsi < 45 and up_ok:
++    rlevels = [("20d-low", lo20)] + [(f"fib{r}", v) for r, v in fib.items()]
++    if sup:
++        rlevels.append(("support", max(sup)))
++    for name, lvl in rlevels:
++        if near(c, lvl, ZONE_TOL) and bull_pat and rsi < 45 and dn_ctx \
++                and m15_up:
+             tgt, ext = objective(1)
+             tgt_txt = f"{tgt:.2f}" if tgt else f"{ext['ext162']:.2f}"
+             rr = (float(tgt_txt) - c) / (c - lvl * 0.995) \
+                 if c > lvl * 0.995 else 0
+             if rr < 1.0:
+                 continue
+-            return {"state": "Possible upcoming Reversal",
+-                    "price": round(c, 2), "target": tgt_txt,
+-                    "stop": round(lvl * 0.995, 2),
+-                    "note": f"{sorted(pats & set(BULL_PAT))[0]} at {name} "
+-                            f"{lvl:.2f} " + _votes(votes)}
+-    return {"state": "-", "price": round(c, 2), "target": "-",
+-            "stop": "-", "note": "no qualified state " + _votes(votes)}
++            out.append({"state": "Possible upcoming Reversal",
++                        "price": round(c, 2), "target": tgt_txt,
++                        "stop": round(lvl * 0.995, 2),
++                        "note": f"{sorted(pats & set(BULL_PAT))[0]} at {name} "
++                                f"{lvl:.2f} " + _votes(votes)})
++            break
++    return out
+ 
+ 
+ def _votes(votes: dict) -> str:
+@@ -224,7 +267,7 @@ def main() -> int:
+     pxd = yf.download(syms, period="1y", interval="1d", auto_adjust=True,
+                       progress=False, threads=True, group_by="ticker")
+     lines, states = [], {}
+-    prev = json.load(open(STATE)) if os.path.exists(STATE) else {}
++    prev = _load_state()
+     for t in syms:
+         try:
+             h = pxd[t] if len(syms) > 1 else pxd
+@@ -244,14 +287,16 @@ def main() -> int:
+                         _f["Close"].ewm(span=26, adjust=False).mean()
+                     _f["macd"] = _m
+                     _f["macd_sig"] = _m.ewm(span=9, adjust=False).mean()
+-            r = analyze(t, d, h1, m15)
+-            key = (r["state"], r["price"], r["note"])
+-            states[t] = {"state": r["state"], "note": r["note"]}
+-            if r["state"] != "-" and prev.get(t) != states[t]:
+-                lines.append(
+-                    f'"{t} - {r["state"]} - at {r["price"]} price - '
+-                    f'target price {r["target"]} - '
+-                    f'stop loss {r["stop"]}. ({r["note"]})')
++            results = analyze(t, d, h1, m15)
++            cur = {}
++            for r in results:
++                cur[r["state"]] = r["note"]
++                if prev.get(t, {}).get(r["state"]) != r["note"]:
++                    lines.append(
++                        f'"{t} - {r["state"]} - at {r["price"]} price - '
++                        f'target price {r["target"]} - '
++                        f'stop loss {r["stop"]}. ({r["note"]})')
++            states[t] = cur
+         except Exception as e:
+             print(f"skip {t}: {e}", flush=True)
+     json.dump(states, open(STATE, "w"))
+diff --git a/scanner/rehearse.py b/scanner/rehearse.py
+index 8ad14ea..a575b3d 100644
+--- a/scanner/rehearse.py
++++ b/scanner/rehearse.py
+@@ -34,7 +34,8 @@ def main() -> int:
+         frames = pickle.load(f)
+ 
+     variants = [(v["strategy"], 1 if v["side"] == "long" else -1,
+-                 v["filters"]["adx_min"], v["name"], v["grade"])
++                 v["filters"]["adx_min"], v["filters"].get("rvol_min", 2.0),
++                 v["name"], v["grade"])
+                 for v in algo["variants"]]
+     print(f"algo {algo['algo']} | {len(frames)} tickers | "
+           f"last bar {max(f.index[-1].date().isoformat() for f in frames.values())}")
+@@ -44,8 +45,8 @@ def main() -> int:
+         c = float(f["Close"].iloc[i])
+         a = float(f["atr"].iloc[i])
+         adx = float(f["adx"].iloc[i])
+-        for s, d, ax, name, grade in variants:
+-            m = signal_mask(f, s, d, ax)
++        for s, d, ax, rv, name, grade in variants:
++            m = signal_mask(f, s, d, ax, rv)
+             if m[i]:
+                 entry = c  # reference; real fill = next open per gate
+                 risk = risk_of(f, s, d, i)
+diff --git a/scanner/scan.py b/scanner/scan.py
+index 0427af6..c9efb1d 100644
+--- a/scanner/scan.py
++++ b/scanner/scan.py
+@@ -106,7 +106,8 @@ def scan_nightly(frames: dict, algo: dict) -> list:
+         for v in algo["variants"]:
+             d = 1 if v["side"] == "long" else -1
+             if not signal_mask(f, v["strategy"], d,
+-                               v["filters"]["adx_min"])[i]:
++                               v["filters"]["adx_min"],
++                               v["filters"].get("rvol_min", 2.0))[i]:
+                 continue
+             entry = float(f["Close"].iloc[i])
+             risk = risk_of(f, v["strategy"], d, i)
+diff --git a/scanner/test_analyze.py b/scanner/test_analyze.py
+new file mode 100644
+index 0000000..0335598
+--- /dev/null
++++ b/scanner/test_analyze.py
+@@ -0,0 +1,152 @@
++"""Standalone checks for the analyzer gates (no network, no arguments).
++
++Usage (project root, venv active):
++    python scanner/test_analyze.py
++
++Covers: rejection = up context (D+1h UP) + 15m flip down at resistance;
++reversal = down context (D+1h DN) + 15m flip up at support; Long coexists
++with rejection/reversal; breakout RVOL relaxation (default 2.0 preserved,
++live 1.5); pre-multistate STATE file migration.
++"""
++from __future__ import annotations
++
++import json
++import os
++import sys
++import tempfile
++
++import numpy as np
++import pandas as pd
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
++    os.path.abspath(__file__))), "backtest"))
++import analyze as _anz  # noqa: E402
++from analyze import analyze  # noqa: E402
++from combos import signal_mask  # noqa: E402
++
++N = 130  # swing_levels needs a 120-bar lookback
++
++
++def _daily(**kw) -> pd.DataFrame:
++    # Wide synthetic swing (99/90) so swing Fib/supports sit well clear of
++    # close and the RR>=1 gate behaves like a real tape, not merged noise.
++    base = dict(Open=99.0, High=99.0, Low=90.0, Close=98.9, ema9=97.5,
++                ema21=97.5, ema50=97.0, ema200=94.0, sma50=96.0, sma200=95.0,
++                rsi=60.0, atr=1.0, rvol=0.5, hi20=99.5, lo20=90.0, adx=25.0,
++                bull=True, macd=0.1, macd_sig=0.0)
++    base.update(kw)
++    return pd.DataFrame({k: np.full(N, float(v)) if not isinstance(v, bool)
++                         else np.full(N, v) for k, v in base.items()})
++
++
++def _tf(close: float, ema21: float, up: bool) -> pd.DataFrame:
++    n = 30
++    macd, sig = (0.1, 0.0) if up else (-0.1, 0.0)
++    return pd.DataFrame({"Close": np.full(n, close),
++                         "ema21": np.full(n, ema21),
++                         "macd": np.full(n, macd),
++                         "macd_sig": np.full(n, sig)})
++
++
++def _rejection_frames(rvol=0.5, hi20=99.5, m15_dn=True):
++    """At the 20d high, bearish engulfing, RSI 60, D+1h UP."""
++    d = _daily(rvol=rvol, hi20=hi20)
++    d.loc[N - 2, ["Open", "Close"]] = [99.0, 99.8]  # prior bull bar
++    d.loc[N - 1, ["Open", "High", "Low", "Close"]] = [100.0, 100.8, 99.0, 98.9]
++    h1 = _tf(100.0, 99.0, True)
++    m15 = _tf(100.0, 101.0, False) if m15_dn else _tf(101.0, 100.0, True)
++    return d, h1, m15
++
++
++def _reversal_frames():
++    """At the 20d low, bullish engulfing, RSI 40, D+1h DN, 15m UP."""
++    d = _daily(Close=91.6, High=97.0, Low=90.8, ema9=93.0, ema21=93.5,
++               ema50=94.0, ema200=96.0, sma50=95.0, sma200=97.0, rsi=40.0,
++               hi20=100.0, lo20=91.0, bull=False, macd=-0.1)
++    d.loc[N - 2, ["Open", "Close"]] = [91.5, 90.8]  # prior bear bar
++    d.loc[N - 1, ["Open", "High", "Low", "Close"]] = [90.6, 91.9, 90.5, 91.6]
++    h1 = _tf(90.0, 91.0, False)
++    m15 = _tf(91.0, 90.0, True)
++    return d, h1, m15
++
++
++def _states(results):
++    if isinstance(results, dict):  # pre-multistate analyze() returned one dict
++        results = [results]
++    return [r["state"] for r in results]
++
++
++def t_rejection_fires():
++    states = _states(analyze("T", *_rejection_frames()))
++    assert states == ["Possible upcoming Rejection"], states
++
++
++def t_rejection_needs_15m_flip():
++    states = _states(analyze("T", *_rejection_frames(m15_dn=False)))
++    assert "Possible upcoming Rejection" not in states, states
++
++
++def t_reversal_fires():
++    states = _states(analyze("T", *_reversal_frames()))
++    assert states == ["Possible upcoming Reversal"], states
++
++
++def t_long_coexists_with_rejection():
++    # close sits above the 20d high (breakout, RVOL>=live min) AND near it
++    # (rejection zone) with the 15m flipped down -> both states fire.
++    d, h1, m15 = _rejection_frames(rvol=2.1, hi20=98.5)
++    states = _states(analyze("T", d, h1, m15))
++    assert "Long" in states and "Possible upcoming Rejection" in states, states
++
++
++def t_rvol_default_preserved_but_relaxable():
++    f = pd.DataFrame({"Close": [101.0], "Open": [99.0], "High": [101.0],
++                      "Low": [98.0], "ema9": [99.0], "ema21": [98.0],
++                      "ema50": [97.0], "sma200": [95.0], "rsi": [60.0],
++                      "rvol": [1.6], "hi20": [100.0], "lo20": [90.0],
++                      "adx": [25.0], "bull": [True]})
++    assert not bool(signal_mask(f, "breakout", 1, 20.0)[0])  # default 2.0
++    assert bool(signal_mask(f, "breakout", 1, 20.0, 1.5)[0])  # live 1.5
++
++
++def t_state_migration():
++    fd, path = tempfile.mkstemp(suffix=".json")
++    os.close(fd)
++    try:
++        json.dump({"A": {"state": "Long", "note": "n1"},
++                   "B": {"state": "-", "note": "x"},
++                   "C": {"Long": "n2"}}, open(path, "w"))
++        old, _anz.STATE = _anz.STATE, path
++        try:
++            got = _anz._load_state()
++        finally:
++            _anz.STATE = old
++    finally:
++        os.remove(path)
++    assert got == {"A": {"Long": "n1"}, "B": {}, "C": {"Long": "n2"}}, got
++
++
++TESTS = [t_rejection_fires, t_rejection_needs_15m_flip, t_reversal_fires,
++         t_long_coexists_with_rejection, t_rvol_default_preserved_but_relaxable,
++         t_state_migration]
++
++
++def main() -> int:
++    fails = 0
++    for t in TESTS:
++        try:
++            t()
++            print(f"PASS {t.__name__}")
++        except AssertionError as e:
++            fails += 1
++            print(f"FAIL {t.__name__}: {e}")
++        except Exception as e:  # noqa: BLE001 - test harness reports all
++            fails += 1
++            print(f"ERROR {t.__name__}: {type(e).__name__}: {e}")
++    print(f"{len(TESTS) - fails}/{len(TESTS)} passed")
++    return 1 if fails else 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
