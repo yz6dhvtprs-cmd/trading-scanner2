@@ -81,13 +81,16 @@ def main() -> int:
     print(f"screened {len(scored)} -> watch {len(top)} | "
           f"NEW {new} | KICKED {kicked}", flush=True)
 
-    # Top-10 single text: first run of the day, or membership changed.
-    # Order shuffles alone don't text (hourly rank noise).
+    # Top-10 single text: first run of the day, or the (ticker, dir)
+    # set changed. Rank-order shuffles alone never text (hourly noise);
+    # a direction flip on a kept name does (that is new information).
     ranked = sorted(top.items(), key=lambda kv: -kv[1]["conf"])
     top10 = [t for t, _ in ranked[:10]]
+    cur = {(t, top[t]["dir"]) for t in top10}
     st = json.load(open(TOP10)) if os.path.exists(TOP10) else {}
     today = dt.date.today().isoformat()
-    if st.get("date") != today or set(st.get("top10", [])) != set(top10):
+    old = {(t, st.get("dirs", {}).get(t, "?")) for t in st.get("top10", [])}
+    if st.get("date") != today or old != cur:
         body = ", ".join(f"{t}{top[t]['dir']}" for t in top10)
         msg = (f"TOP10 {dt.datetime.now().strftime('%H:%M')}PT: {body}")
         print(msg, flush=True)
@@ -96,7 +99,8 @@ def main() -> int:
                                for c in a.channels.split(",")], cfg,
                          title="Top 10 trends"):
             print("  ", res, flush=True)
-        json.dump({"date": today, "top10": top10}, open(TOP10, "w"))
+        json.dump({"date": today, "top10": top10,
+                   "dirs": {t: top[t]["dir"] for t in top10}}, open(TOP10, "w"))
     else:
         print("TOP10 unchanged, no text", flush=True)
     return 0
