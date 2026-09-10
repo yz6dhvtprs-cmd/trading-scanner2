@@ -316,8 +316,9 @@ def t_rps_pair_and_combo():
     # tournament pair wired: RPS resolves to the R3+R10 agreement combo,
     # which fires R3's signal only with same-bar/same-side R10 agreement.
     assert _bt.RPS_PAIR == ("R3", "R10"), _bt.RPS_PAIR
-    assert _bt.parse_algos("rps") == {"R3+R10"}
-    assert _bt.parse_algos("RPS") == {"R3+R10"}
+    assert _bt.parse_algos("rps") == {"RPS"}
+    assert _bt.parse_algos("RPS") == {"RPS"}
+    assert _bt.parse_algos("rps1") == {"R3+R10"}
     sig_a = {"state": "Possible upcoming Reversal", "price": 100.0,
              "stop": 98.0, "note": "tl-break", "sig_key": ("R3", "x")}
     sig_b = {"state": "Possible upcoming Reversal", "price": 100.5,
