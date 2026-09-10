@@ -194,9 +194,39 @@ def t_trace_skip_reasons():
     assert any("15m not DN" in c for c in tr["checks"]), tr["checks"]
 
 
+def t_grade_filter():
+    assert _bt.parse_grade("b") == "B"
+    assert _bt.parse_grade("B+") == "B+"
+    try:
+        _bt.parse_grade("D")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("parse_grade('D') should raise")
+    ranks = [_bt.grade_rank(g) for g in ("C", "B", "B+", "A", "A+")]
+    assert ranks == sorted(ranks) and len(set(ranks)) == 5, ranks
+    assert _bt.grade_rank("B (thin)") == _bt.grade_rank("B")
+    assert _bt.grade_rank("?") < _bt.grade_rank("C")
+
+    def hit(i, g):
+        return {"id": i, "grade": g}
+    hits = [hit(1, "C"), hit(2, "B"), hit(3, "B+"), hit(4, "A"),
+            hit(5, "A+"), hit(6, "?")]
+    shown, hidden = _bt.filter_hits([dict(h) for h in hits], "B")
+    assert [h["grade"] for h in shown] == ["B", "B+", "A", "A+"], shown
+    assert hidden == 2, hidden  # C and ? stay out
+    assert [h["id"] for h in shown] == [1, 2, 3, 4], "ids renumber shown rows"
+    shown, hidden = _bt.filter_hits([dict(h) for h in hits], "")
+    assert len(shown) == 6 and hidden == 0
+    assert [h["id"] for h in shown] == [1, 2, 3, 4, 5, 6]
+    shown, hidden = _bt.filter_hits([dict(h) for h in hits], "A+")
+    assert [h["grade"] for h in shown] == ["A+"] and hidden == 5
+
+
 TESTS = [t_slices_causal, t_forming_bar_ohlc, t_change_only_hits,
          t_reappearing_state_rehits, t_fmt_shape, t_parse_ids,
-         t_trace_rejection_fires, t_trace_skip_reasons, t_grades_mirror_main]
+         t_trace_rejection_fires, t_trace_skip_reasons, t_grades_mirror_main,
+         t_grade_filter]
 
 
 def main() -> int:

@@ -9,10 +9,11 @@ Prints one line per NEWLY appearing state (live change-only semantics).
 
 Usage:
     python scanner/backtest_analyzer.py [--ticker TICKER] [--days N]
-        [--debug 1,3-4]
+        [--debug 1,3-4] [--grade B]
 Missing args are prompted. No alerts, no state writes, no lookahead.
 Every printed setup gets a unique #id; --debug replays the named setups
-with the full per-gate decision trace.
+with the full per-gate decision trace. --grade sets the minimum grade
+shown (B means B and higher: B, B+, A, A+); default shows all trades.
 
 Continuations surface as Long (breakout/pullback triggers); there is no
 SHORT leg while shorts stay paused per algo.json (short bias reads print
@@ -178,6 +179,40 @@ def fmt(ticker: str, hit: dict) -> str:
             f'SL {hit["stop"]} - target {hit["target"]}. ({hit["note"]})"')
 
 
+GRADE_ORDER = ["C", "B", "B+", "A", "A+"]
+
+
+def grade_rank(g: str) -> int:
+    """C < B < B+ < A < A+. 'B (thin)' counts as B; unknown ('?') ranks
+    below everything so a --grade filter never passes it blindly."""
+    base = (g or "").upper().strip().split(" ")[0]
+    try:
+        return GRADE_ORDER.index(base)
+    except ValueError:
+        return -1
+
+
+def parse_grade(s: str) -> str:
+    """Validate a --grade threshold. Returns the canonical grade."""
+    g = (s or "").upper().strip()
+    if g not in GRADE_ORDER:
+        raise ValueError(f"bad --grade {s!r} (want one of "
+                         f"{', '.join(GRADE_ORDER)})")
+    return g
+
+
+def filter_hits(hits: list, min_grade: str) -> tuple:
+    """(shown, hidden_count): keep hits at/above min_grade, renumbered so
+    #ids always match what is printed (debug ids refer to shown rows)."""
+    if not min_grade:
+        return hits, 0
+    bar = grade_rank(min_grade)
+    shown = [h for h in hits if grade_rank(h.get("grade", "?")) >= bar]
+    for n, h in enumerate(shown, 1):
+        h["id"] = n
+    return shown, len(hits) - len(shown)
+
+
 def parse_ids(s: str) -> list:
     """'1,3-4' -> [1, 3, 4]. Raises ValueError on bad input."""
     out = []
@@ -224,9 +259,12 @@ def main() -> int:
     ap.add_argument("--days", default="")
     ap.add_argument("--debug", default="",
                     help="setup ids to trace, e.g. '1' or '1,3-4'")
+    ap.add_argument("--grade", default="",
+                    help="minimum grade shown, e.g. B (=B,B+,A,A+)")
     a = ap.parse_args()
     try:
         debug_ids = parse_ids(a.debug) if a.debug.strip() else []
+        min_grade = parse_grade(a.grade) if a.grade.strip() else ""
     except ValueError as e:
         print(e, flush=True)
         return 1
@@ -260,11 +298,14 @@ def main() -> int:
           f"1h {days}+{H1_WARMUP_DAYS}d warmup | change-only hits",
           flush=True)
     hits, stats = walk(ticker, d_full, h1_full, m15_full)
+    hits, hidden = filter_hits(hits, min_grade)
+    filt = f" | grade filter {min_grade}+ ({hidden} below-grade hidden)" \
+        if min_grade else ""
     for h in hits:
         print(fmt(ticker, h), flush=True)
     print(f"done: {len(hits)} trade setups | {stats['evaluated']} bars "
           f"evaluated, {stats['skipped']} warmup-skipped, "
-          f"{stats['errors']} errors", flush=True)
+          f"{stats['errors']} errors{filt}", flush=True)
     if debug_ids:
         by_id = {h["id"]: h for h in hits}
         unknown = [i for i in debug_ids if i not in by_id]
