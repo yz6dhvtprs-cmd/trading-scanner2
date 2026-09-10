@@ -34,7 +34,29 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
 from analyze import analyze, flat  # noqa: E402
 from combos import add_features  # noqa: E402
 from indicators2 import add_extra  # noqa: E402
-from reversals import r1_123, r2_zigzag_tema  # noqa: E402
+from reversals import (REV_ALGOS, r1_123, r2_zigzag_tema,  # noqa: E402
+                       r3_trendline, r4_channel, r5_maslope, r6_donchian,
+                       r7_macddiv, r8_obv, r9_climax, r10_volosc)
+
+# algo -> backtest-namespace global holding its routine (module-global
+# lookup so tests can stub routines by patching _bt.<name>).
+ROUTER = {"R1": "r1_123", "R2": "r2_zigzag_tema", "R3": "r3_trendline",
+          "R4": "r4_channel", "R5": "r5_maslope", "R6": "r6_donchian",
+          "R7": "r7_macddiv", "R8": "r8_obv", "R9": "r9_climax",
+          "R10": "r10_volosc"}
+assert set(ROUTER) == set(REV_ALGOS), "router/registry drift"
+
+# Tournament-selected pair for --algo RPS (20d, AAPL/MSFT/TSLA/NVDA/MSTR):
+# RP=R3 trendline-break (4 wins, 4-1 decided = 80%, tied-most wins);
+# RS=R10 VO-divergence (4 wins itself; co-won 2 of R3's 4 winners: the
+# same-bar AAPL 08-12 long and the next-day NVDA 08-19 short).
+RPS_PAIR = ("R3", "R10")
+
+_LONG_STATES = {"Long", "Possible upcoming Reversal"}
+
+
+def _sameside(s1: str, s2: str) -> bool:
+    return (s1 in _LONG_STATES) == (s2 in _LONG_STATES)
 
 PT = "America/Los_Angeles"
 MIN_DAILY = 121   # swing_levels reads a 120-bar lookback
@@ -151,10 +173,23 @@ def slices_for(d_full: pd.DataFrame, h1_full: pd.DataFrame,
     return d, h1, m15
 
 
-ALGO_ORDER = ["OLD", "R1", "R2"]  # fixed eval order per bar
 COOLDOWN_BARS = 26  # same pattern key can't re-fire within ~1 session:
                     # intraday trigger/pivot flicker around a level is one
                     # setup (one #id), a re-break days later is a new one
+
+
+def _rnum(a: str) -> int:
+    try:
+        return int(a[1:])
+    except (ValueError, IndexError):
+        return 10 ** 6
+
+
+def _canon_order(algos: set) -> list:
+    """Deterministic per-bar eval order: OLD, singles ascending, combos."""
+    canon = ["OLD"] + sorted(REV_ALGOS, key=_rnum)
+    return [x for x in canon if x in algos] + \
+        sorted(x for x in algos if "+" in x)
 
 
 def eval_bar(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
@@ -164,11 +199,94 @@ def eval_bar(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
     kwarg is only passed when set, keeping the walk-time call identical to
     the direct routine call."""
     kw = {} if trace is None else {"trace": trace}
-    if algo == "R1":
-        return r1_123(d, **kw)
-    if algo == "R2":
-        return r2_zigzag_tema(d, **kw)
+    if "+" in algo:
+        return _eval_combo(algo, ticker, d, h1, m15, trace)
+    if algo in ROUTER:
+        return globals()[ROUTER[algo]](d, **kw)
     return analyze(ticker, d, h1, m15, **kw)
+
+
+def _eval_combo(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
+                m15: pd.DataFrame, trace: dict | None) -> list:
+    """Agreement filter: fires the FIRST routine's signals only where the
+    second routine fires the same bar in the same direction. Entry/SL come
+    from the first routine; the pair shares one sig_key."""
+    parts = algo.split("+", 1)
+    if len(parts) != 2 or not all(parts):
+        return []
+    tra, trb = ({"checks": []}, {"checks": []}) \
+        if trace is not None else (None, None)
+    ra = eval_bar(parts[0], ticker, d, h1, m15, trace=tra)
+    rb = eval_bar(parts[1], ticker, d, h1, m15, trace=trb)
+    paired = []
+    for a in ra:
+        partners = [x for x in rb
+                    if _sameside(a.get("state", ""), x.get("state", ""))]
+        if not partners:
+            continue
+        b = partners[0]
+        p = dict(a)
+        ka = a.get("sig_key") or (parts[0], a.get("state"))
+        kb = b.get("sig_key") or (parts[1], b.get("state"))
+        p["algo"] = algo
+        p["note"] = a.get("note", "") + f" & {parts[1]}-agree"
+        p["sig_key"] = ("combo", parts[0], parts[1], ka, kb)
+        paired.append(p)
+    if trace is not None:
+        trace.update({
+            "algo": algo,
+            "checks": [f"{parts[0]}: {c}" for c in tra.get("checks", [])] +
+                      [f"{parts[1]}: {c}" for c in trb.get("checks", [])],
+            "fired": [r["state"] for r in paired]})
+    return paired
+
+
+def parse_algos(s: str) -> set:
+    """'1,3,R5' -> {'R1','R3','R5'}. Keywords: both (R1+R2, legacy
+    default), rev (all R*), all (OLD + all R*), rps (tournament pair),
+    'Rn+Rm' agreement combos. Raises ValueError on bad input."""
+    valid = ["OLD", "BOTH", "REV", "ALL", "RPS"] + sorted(
+        REV_ALGOS, key=_rnum)
+    out: set = set()
+
+    def one(tok: str) -> str:
+        t = tok.strip().upper()
+        if t.isdigit():
+            t = "R" + t
+        if t not in REV_ALGOS and t != "OLD":
+            raise ValueError(f"bad --algo {tok!r} (want one of "
+                             f"{', '.join(valid)} or combos like R4+R2)")
+        return t
+
+    for tok in s.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        t = tok.upper()
+        if t == "BOTH":
+            out |= {"R1", "R2"}
+        elif t == "REV":
+            out |= set(REV_ALGOS)
+        elif t == "ALL":
+            out |= {"OLD"} | set(REV_ALGOS)
+        elif t == "RPS":
+            if RPS_PAIR is None:
+                raise ValueError("--algo RPS pair not selected yet "
+                                 "(tournament step pending)")
+            out.add(f"{RPS_PAIR[0]}+{RPS_PAIR[1]}")
+        elif "+" in t:
+            parts = [one(p) for p in t.split("+")]
+            if len(parts) != 2 or parts[0] == parts[1]:
+                raise ValueError(f"bad --algo combo {tok!r} (want Rn+Rm, "
+                                 f"two different routines)")
+            out.add("+".join(parts))
+        elif tok.upper() == "OLD":
+            out.add("OLD")
+        else:
+            out.add(one(tok))
+    if not out:
+        raise ValueError("--algo selects nothing")
+    return out
 
 
 def walk(ticker: str, d_full: pd.DataFrame, h1_full: pd.DataFrame,
@@ -196,7 +314,7 @@ def walk(ticker: str, d_full: pd.DataFrame, h1_full: pd.DataFrame,
             continue
         evaluated += 1
         bar_keys = set()
-        for algo in [x for x in ALGO_ORDER if x in algos]:
+        for algo in _canon_order(algos):
             try:
                 results = eval_bar(algo, ticker, d, h1, m15)
             except Exception:
@@ -404,18 +522,13 @@ def main() -> int:
     ap.add_argument("--grade", default="",
                     help="minimum grade shown, e.g. B (=B,B+,A,A+)")
     ap.add_argument("--algo", default="both",
-                    help="1, 2, both (default: the two new reversal "
-                    "routines), all (also the armed gates)")
+                    help="1..10, OLD, combos Rn+Rm, extras (both/rev/all/rps)")
     ap.add_argument("--score", action=argparse.BooleanOptionalAction,
                     default=True, help="forward 1R-vs-SL check per setup")
     a = ap.parse_args()
-    algo_sets = {"1": {"R1"}, "2": {"R2"}, "both": {"R1", "R2"},
-                 "all": {"OLD", "R1", "R2"}}
-    sel = (a.algo or "both").strip().lower()
-    if sel not in algo_sets:
-        print(f"bad --algo {a.algo!r} (want 1, 2, both, all)", flush=True)
-        return 1
+    sel = (a.algo or "both").strip()
     try:
+        algos = parse_algos(sel)
         debug_ids = parse_ids(a.debug) if a.debug.strip() else []
         min_grade = parse_grade(a.grade) if a.grade.strip() else ""
     except ValueError as e:
@@ -452,7 +565,7 @@ def main() -> int:
           f"1h {days}+{H1_WARMUP_DAYS}d warmup | algos {sel} | "
           f"change-only hits", flush=True)
     hits, stats = walk(ticker, d_full, h1_full, m15_walk,
-                       algos=algo_sets[sel], m15_hist=m15_full)
+                       algos=algos, m15_hist=m15_full)
     hits, hidden = filter_hits(hits, min_grade)
     filt = f" | grade filter {min_grade}+ ({hidden} below-grade hidden)" \
         if min_grade else ""

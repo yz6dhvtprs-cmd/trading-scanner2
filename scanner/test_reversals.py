@@ -20,7 +20,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "backtest"))
 from reversals import (atr_zigzag, fractal_pivots, r1_123,  # noqa: E402
-                       r2_zigzag_tema, tema)
+                       r2_zigzag_tema, tema, r3_trendline, r4_channel,
+                       r5_maslope, r6_donchian, r7_macddiv, r8_obv,
+                       r9_climax, r10_volosc)
 
 ET = "America/New_York"
 
@@ -196,10 +198,381 @@ def t_r2_shallow_pullback_skips():
     assert r2_zigzag_tema(d, trace=tr) == []
 
 
+def _trend_frame():
+    """40 bars: rising baseline with fractal anchors at bars 10 and 22
+    (lows for the up-line, highs for the channel), a 4-bar crash on
+    bars 35-38, then an exhaustion wick on the LAST bar: high spikes
+    over any channel top while the close stays crashed under the line.
+    The wick sits at the unconfirmed edge so it never becomes a pivot
+    anchor itself."""
+    n = 40
+    base = 100 + 0.3 * np.arange(n)
+    lo = base - 0.5
+    hi = base + 0.3
+    lo[10] -= 1.5
+    lo[22] -= 1.0
+    hi[10] += 1.5
+    hi[22] += 1.0
+    cl = np.array(list(base[:35]) + [108.5, 106.0, 104.0, 103.0, 102.0],
+                 float)
+    hi = np.array(hi, float)
+    lo = np.array(lo, float)
+    hi[35:39] = cl[35:39] + 0.3
+    lo[35:39] = cl[35:39] - 0.5
+    hi[39] = 118.5  # exhaustion wick over the channel top (~117.8)
+    lo[39] = 101.5
+    return _daily(n, cl, hi, lo)
+
+
+def t_r3_break_fires():
+    d = _trend_frame()
+    tr: dict = {}
+    res = r3_trendline(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["state"] == "Possible upcoming Rejection" and r["algo"] == "R3"
+    assert r["stop"] > r["price"] and "tl-break" in r["note"]
+    assert r["sig_key"][0] == "R3" and r["sig_key"][1] == "top"
+    assert r["stop"] == round(float(d["High"].iloc[34]) + 0.25, 2), r
+
+
+def t_r3_no_break_no_trade():
+    d = _trend_frame().iloc[:35]  # ends at the pre-crash top
+    tr: dict = {}
+    assert r3_trendline(d, trace=tr) == []
+    assert tr["fired"] == []
+
+
+def t_r3_bull_mirror():
+    n = 40
+    base = 120 - 0.3 * np.arange(n)
+    lo = base - 0.5
+    hi = base + 0.3
+    hi[10] += 1.5
+    hi[22] += 1.0
+    lo[16] -= 1.5  # separating low so both highs survive the merge
+    cl = list(base[:35]) + [116.0, 119.0, 121.0, 122.0, 122.5]
+    cl = np.array(cl, float)
+    hi = np.array(hi, float)
+    lo = np.array(lo, float)
+    hi[35:] = cl[35:] + 0.3
+    lo[35:] = cl[35:] - 0.5
+    d = _daily(n, cl, hi, lo)
+    tr: dict = {}
+    res = r3_trendline(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    assert res[0]["state"] == "Possible upcoming Reversal"
+    assert res[0]["stop"] < res[0]["price"]
+
+
+def t_r4_overshoot_and_confirm():
+    d = _trend_frame()  # wick high 118.5 on the last bar
+    tr: dict = {}
+    res = r4_channel(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["algo"] == "R4" and r["stop"] == round(118.5 + 0.25, 2), r
+    assert r["sig_key"] == ("R4", "top", d.index[39].date().isoformat())
+    # overshoot without the wick: ends mid-crash, no 5-bar overshoot
+    tr2: dict = {}
+    assert r4_channel(d.iloc[:38], trace=tr2) == []
+    assert tr2["fired"] == []
+
+
+def _sma_frame(direction="dn"):
+    """SMA50 flat at 100 through bar 54, then 5 falling/rising bars so the
+    5-bar slope flips exactly at bar 55 (the most recent flip in the
+    routine's 5-bar window); close crosses the average at the same bar."""
+    n = 60
+    idx = pd.bdate_range("2026-01-05", periods=n, tz=ET)
+    if direction == "dn":
+        sma = [100.0] * 55 + [99.7, 99.3, 98.9, 98.5, 98.0]
+        cl = [100.5] * 55 + [99.0, 98.5, 98.0, 97.5, 97.0]
+    else:
+        sma = [100.0] * 55 + [100.3, 100.7, 101.1, 101.5, 102.0]
+        cl = [99.5] * 55 + [100.8, 101.2, 101.6, 102.0, 102.5]
+    cl = np.array(cl, float)
+    d = pd.DataFrame({"Open": cl - 0.1, "High": cl + 0.3, "Low": cl - 0.5,
+                      "Close": cl, "Volume": 1_000_000.0}, index=idx)
+    d["atr"] = 1.0
+    d["sma50"] = sma
+    return d
+
+
+def t_r5_flip_fires():
+    d = _sma_frame("dn")
+    tr: dict = {}
+    res = r5_maslope(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["state"] == "Possible upcoming Rejection" and r["algo"] == "R5"
+    assert r["stop"] == round(float(d["High"].iloc[-10:].max()) + 0.25, 2)
+    assert r["sig_key"] == ("R5", "top", d.index[55].date().isoformat()), \
+        r["sig_key"]
+
+
+def t_r5_bull_mirror():
+    d = _sma_frame("up")
+    tr: dict = {}
+    res = r5_maslope(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["state"] == "Possible upcoming Reversal"
+    assert r["sig_key"] == ("R5", "bottom", d.index[55].date().isoformat()), \
+        r["sig_key"]
+
+
+def _donch_frame(direction="bull"):
+    n = 60
+    idx = pd.bdate_range("2026-01-05", periods=n, tz=ET)
+    if direction == "bull":
+        cl = np.linspace(110, 100, n)
+        cl[-1] = 109.0  # pop over the 20d high
+        sma = np.linspace(109, 99, n)
+        hi20 = np.full(n, 108.0)
+        lo20 = np.full(n, 95.0)
+    else:
+        cl = np.linspace(100, 110, n)
+        cl[-1] = 101.0  # flush under the 20d low
+        sma = np.linspace(101, 111, n)
+        hi20 = np.full(n, 115.0)
+        lo20 = np.full(n, 102.0)
+    d = pd.DataFrame({"Open": cl - 0.1, "High": cl + 0.3, "Low": cl - 0.5,
+                      "Close": cl, "Volume": 1_000_000.0}, index=idx)
+    d["atr"] = 1.0
+    d["sma50"] = sma
+    d["hi20"] = hi20
+    d["lo20"] = lo20
+    return d
+
+
+def t_r6_break_fires():
+    d = _donch_frame("bull")
+    tr: dict = {}
+    res = r6_donchian(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["state"] == "Possible upcoming Reversal" and r["algo"] == "R6"
+    assert r["sig_key"] == ("R6", "bottom", 108.0), r["sig_key"]
+    assert r["stop"] == round(float(d["Low"].iloc[-10:].min()) - 0.25, 2)
+
+
+def t_r6_bear_mirror():
+    d = _donch_frame("bear")
+    tr: dict = {}
+    res = r6_donchian(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    assert res[0]["state"] == "Possible upcoming Rejection"
+    assert res[0]["sig_key"] == ("R6", "top", 102.0)
+
+
+def _interp(n, pts):
+    cl = np.zeros(n)
+    for (b0, v0), (b1, v1) in zip(pts, pts[1:]):
+        cl[b0:b1 + 1] = np.linspace(v0, v1, b1 - b0 + 1)
+    return cl
+
+
+def _div_frame(direction="bear"):
+    n = 60
+    idx = pd.bdate_range("2026-01-05", periods=n, tz=ET)
+    if direction == "bear":
+        cl = _interp(n, [(0, 94), (20, 100), (27, 96), (35, 102), (42, 97),
+                         (50, 104), (59, 100)])
+        macd = np.zeros(n)
+        macd[20], macd[35], macd[50] = 2.0, 1.2, 0.4
+        macd[51:55] = 0.38
+        macd[55] = 0.4
+        macd[56:] = 0.1
+        sig = np.full(n, 0.3)
+    else:
+        cl = _interp(n, [(0, 106), (20, 100), (27, 104), (35, 98), (42, 103),
+                         (50, 96), (59, 100)])
+        macd = np.zeros(n)
+        macd[20], macd[35], macd[50] = -1.0, -0.5, -0.1
+        macd[51:55] = -0.38
+        macd[55] = -0.4
+        macd[56:] = 0.1
+        sig = np.full(n, -0.3)
+    d = pd.DataFrame({"Open": cl - 0.1, "High": cl + 0.3, "Low": cl - 0.5,
+                      "Close": cl, "Volume": 1_000_000.0}, index=idx)
+    d["atr"] = 1.0
+    d["macd"] = macd
+    d["macd_sig"] = sig
+    return d
+
+
+def t_r7_divergence_fires():
+    d = _div_frame("bear")
+    tr: dict = {}
+    res = r7_macddiv(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["state"] == "Possible upcoming Rejection" and r["algo"] == "R7"
+    assert r["stop"] == round(104.3 + 0.25, 2), r  # 3rd high + buffer
+    assert r["sig_key"][0] == "R7" and len(r["sig_key"]) == 5
+
+
+def t_r7_bull_mirror():
+    d = _div_frame("bull")
+    tr: dict = {}
+    res = r7_macddiv(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    assert res[0]["state"] == "Possible upcoming Reversal"
+    assert res[0]["stop"] == round(95.5 - 0.25, 2), res[0]  # 3rd low - buffer
+
+
+def _obv_frame(direction="bear"):
+    """Price grinds to a fresh 20-day extreme on the last bar while OBV
+    sags under its EMA21: drift days run on light volume, counter-days
+    on heavy volume. Bear: +0.5 x3 on 400k, -1.1 on 2M (net drift up,
+    OBV down). Bull mirrors with heavy volume on the up-flush days."""
+    n = 60
+    idx = pd.bdate_range("2026-01-05", periods=n, tz=ET)
+    moves, vols = [], []
+    for i in range(20):
+        if direction == "bear":
+            m = -1.1 if i % 4 == 3 else 0.5
+            v = 2_000_000.0 if i % 4 == 3 else 400_000.0
+        else:
+            m = 1.1 if i % 4 == 3 else -0.5
+            v = 2_000_000.0 if i % 4 == 3 else 400_000.0
+        moves.append(m)
+        vols.append(v)
+    if direction == "bear":
+        base = np.linspace(95, 100, 40)
+        seg = 100.0 + np.cumsum(moves)
+    else:
+        base = np.linspace(105, 100, 40)
+        seg = 100.0 + np.cumsum(moves)
+    cl = np.concatenate([base, seg])
+    vol = np.concatenate([np.full(40, 1_000_000.0), np.array(vols)])
+    d = pd.DataFrame({"Open": cl - 0.1, "High": cl + 0.1, "Low": cl - 0.6,
+                      "Close": cl, "Volume": vol}, index=idx)
+    d["atr"] = 1.0
+    return d
+
+
+def t_r8_fade_fires():
+    d = _obv_frame("bear")
+    tr: dict = {}
+    res = r8_obv(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["state"] == "Possible upcoming Rejection" and r["algo"] == "R8"
+    assert r["stop"] == round(float(d["High"].iloc[-20:].max()) + 0.25, 2)
+    eb = int(np.argmax(d["High"].to_numpy()[-20:]))  # fresh-high bar
+    assert r["sig_key"] == ("R8", "top",
+                            d.index[40 + eb].date().isoformat()), r["sig_key"]
+
+
+def t_r8_bull_mirror():
+    d = _obv_frame("bull")
+    tr: dict = {}
+    res = r8_obv(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    assert res[0]["state"] == "Possible upcoming Reversal"
+
+
+def _climax_frame(direction="bear"):
+    n = 60
+    idx = pd.bdate_range("2026-01-05", periods=n, tz=ET)
+    if direction == "bear":
+        cl = np.linspace(100, 106, n)
+        sma = np.full(n, 99.0)
+        hi = cl + 0.3
+        lo = cl - 0.5
+        hi[56], lo[56], cl[56] = 107.5, 106.0, 106.8
+        cl[57], cl[58], cl[59] = 105.5, 105.0, 104.5
+        vol = np.full(n, 1_000_000.0)
+        vol[56] = 9_000_000.0
+    else:
+        cl = np.linspace(112, 106, n)
+        sma = np.full(n, 113.0)
+        hi = cl + 0.5
+        lo = cl - 0.3
+        hi[56], lo[56], cl[56] = 106.0, 104.5, 105.2
+        cl[57], cl[58], cl[59] = 106.5, 107.0, 107.5
+        vol = np.full(n, 1_000_000.0)
+        vol[56] = 9_000_000.0
+    d = pd.DataFrame({"Open": cl - 0.1, "High": hi, "Low": lo,
+                      "Close": cl, "Volume": vol}, index=idx)
+    d["atr"] = 1.0
+    d["sma50"] = sma
+    return d
+
+
+def t_r9_climax_fires():
+    d = _climax_frame("bear")
+    tr: dict = {}
+    res = r9_climax(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["state"] == "Possible upcoming Rejection" and r["algo"] == "R9"
+    assert r["stop"] == 107.75, r
+    assert r["sig_key"] == ("R9", "top", d.index[56].date().isoformat())
+
+
+def t_r9_bull_mirror():
+    d = _climax_frame("bull")
+    tr: dict = {}
+    res = r9_climax(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    assert res[0]["state"] == "Possible upcoming Reversal"
+    assert res[0]["stop"] == 104.25, res[0]
+
+
+def _vo_frame(direction="bear"):
+    n = 60
+    idx = pd.bdate_range("2026-01-05", periods=n, tz=ET)
+    vol = np.full(n, 1_000_000.0)
+    if direction == "bear":
+        cl = _interp(n, [(0, 94), (20, 100), (30, 95), (40, 102), (59, 98)])
+        vol[10:26] = 5_000_000.0
+        vol[26:40] = 500_000.0
+        vol[40:55] = 600_000.0
+        vol[55:] = 150_000.0
+    else:
+        cl = _interp(n, [(0, 106), (20, 100), (30, 105), (40, 98), (59, 102)])
+        vol[0:16] = 8_000_000.0
+        vol[16:26] = 1_000_000.0
+        vol[26:46] = 2_000_000.0
+        vol[46:] = 1_000_000.0
+    d = pd.DataFrame({"Open": cl - 0.1, "High": cl + 0.3, "Low": cl - 0.5,
+                      "Close": cl, "Volume": vol}, index=idx)
+    d["atr"] = 1.0
+    return d
+
+
+def t_r10_divergence_fires():
+    d = _vo_frame("bear")
+    tr: dict = {}
+    res = r10_volosc(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    r = res[0]
+    assert r["state"] == "Possible upcoming Rejection" and r["algo"] == "R10"
+    assert r["stop"] == round(102.3 + 0.25, 2), r  # 2nd high + buffer
+
+
+def t_r10_bull_mirror():
+    d = _vo_frame("bull")
+    tr: dict = {}
+    res = r10_volosc(d, trace=tr)
+    assert len(res) == 1, tr.get("checks")
+    assert res[0]["state"] == "Possible upcoming Reversal"
+    assert res[0]["stop"] == round(97.5 - 0.25, 2), res[0]  # 2nd low - buffer
+
+
 TESTS = [t_fractal_pivots, t_r1_bottom_fires, t_r1_bottom_no_trigger,
          t_r1_top_fires, t_r1_top_failed_failure_is_no_trade,
          t_zigzag_confirms_on_atr_move, t_tema_math_and_stack,
-         t_r2_bear_fires_at_breakdown, t_r2_shallow_pullback_skips]
+         t_r2_bear_fires_at_breakdown, t_r2_shallow_pullback_skips,
+         t_r3_break_fires, t_r3_no_break_no_trade, t_r3_bull_mirror,
+         t_r4_overshoot_and_confirm, t_r5_flip_fires, t_r5_bull_mirror,
+         t_r6_break_fires, t_r6_bear_mirror, t_r7_divergence_fires,
+         t_r7_bull_mirror, t_r8_fade_fires, t_r8_bull_mirror,
+         t_r9_climax_fires, t_r9_bull_mirror, t_r10_divergence_fires,
+         t_r10_bull_mirror]
 
 
 def main() -> int:

@@ -312,6 +312,31 @@ def t_eval_bar_dispatch():
     assert seen == ["OLD", "R1", "R2"], seen
 
 
+def t_rps_pair_and_combo():
+    # tournament pair wired: RPS resolves to the R3+R10 agreement combo,
+    # which fires R3's signal only with same-bar/same-side R10 agreement.
+    assert _bt.RPS_PAIR == ("R3", "R10"), _bt.RPS_PAIR
+    assert _bt.parse_algos("rps") == {"R3+R10"}
+    assert _bt.parse_algos("RPS") == {"R3+R10"}
+    sig_a = {"state": "Possible upcoming Reversal", "price": 100.0,
+             "stop": 98.0, "note": "tl-break", "sig_key": ("R3", "x")}
+    sig_b = {"state": "Possible upcoming Reversal", "price": 100.5,
+             "stop": 99.0, "note": "vo-div", "sig_key": ("R10", "y")}
+    sig_c = {"state": "Possible upcoming Rejection", "price": 100.5,
+             "stop": 102.0, "note": "vo-div", "sig_key": ("R10", "z")}
+    old3, old10 = _bt.r3_trendline, _bt.r10_volosc
+    try:
+        _bt.r3_trendline = lambda *a, **k: [dict(sig_a)]
+        _bt.r10_volosc = lambda *a, **k: [dict(sig_b)]
+        got = _bt._eval_combo("R3+R10", "T", None, None, None, None)
+        assert len(got) == 1 and got[0]["algo"] == "R3+R10", got
+        assert got[0]["price"] == 100.0 and "R10-agree" in got[0]["note"]
+        _bt.r10_volosc = lambda *a, **k: [dict(sig_c)]  # wrong side: no pair
+        assert _bt._eval_combo("R3+R10", "T", None, None, None, None) == []
+    finally:
+        _bt.r3_trendline, _bt.r10_volosc = old3, old10
+
+
 def t_score_hits():
     base = pd.Timestamp("2026-09-08 09:30", tz=ET)
     idx = [base + pd.Timedelta(minutes=15 * i) for i in range(30)]
@@ -342,7 +367,7 @@ TESTS = [t_slices_causal, t_forming_bar_ohlc, t_change_only_hits,
          t_trace_rejection_fires, t_trace_skip_reasons, t_grades_mirror_main,
          t_grade_filter, t_walk_r1_sigkey_change_only, t_eval_bar_dispatch,
          t_score_hits, t_cooldown_suppresses_same_day_refire,
-         t_window_bars]
+         t_window_bars, t_rps_pair_and_combo]
 
 
 def main() -> int:
