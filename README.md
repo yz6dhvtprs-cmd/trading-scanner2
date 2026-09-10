@@ -29,3 +29,21 @@ Then backtest (next step): `python backtest/run.py --universe universe/universe_
 1. Refresh universe (template file is NOT tradeable data).
 2. 2-year walk-forward backtest, positive test-period expectancy net of costs.
 3. 2–4 weeks paper alerts with pre-market gate enforced.
+
+## Agents: start / stop (no tokens needed)
+
+The 8 background agents (analyze, bootstrap, inbox, intraday, nightly,
+premarket, saturday, screen) run as macOS LaunchAgents and reload at login.
+Control them from a Terminal with:
+
+```
+cd /Users/vismaypatel/trading-indicators
+./scanner/agents.sh status    # check what's loaded
+./scanner/agents.sh stop      # stop everything
+./scanner/agents.sh start     # start everything
+./scanner/agents.sh restart   # stop + start
+```
+
+While stopped, interval scans and inbox polling pause; inbound SUBSCRIBE
+texts queue and are processed on `start`. The handler only wraps
+`launchctl load/unload` — it never touches credentials or GitHub.
