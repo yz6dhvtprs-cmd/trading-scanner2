@@ -34,8 +34,8 @@ case "$MODE" in
       --message "Saturday review: ${HEADLINE:-done, see log}" >> "$PROJ/scanner/logs/saturday-$STAMP.log" 2>&1
     ;;
   bootstrap)
-    python scanner/notify.py --channel imessage \
-      --message "Trading system online after login ($(date '+%F %H:%M')). Jobs: intraday 10m, nightly 2:05pm, premarket 6:05am, Sat review 10:15am." \
+    # no subscriber text on login anymore: local log line only.
+    echo "online after login ($(date '+%F %H:%M')), no alerts sent" \
       >> "$PROJ/scanner/logs/bootstrap-$STAMP.log" 2>&1
     ;;
   intraday)
