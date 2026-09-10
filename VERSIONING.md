@@ -10,7 +10,7 @@ Create an empty FREE public repo on github.com (e.g. `trading-indicators`),
 then:
 
 ```bash
-cd /Users/vismaypatel/trading-indicators
+cd ~/trading-indicators
 .venv/bin/python -m dulwich push https://github.com/<you>/trading-indicators.git
 ```
 

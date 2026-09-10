@@ -238,6 +238,15 @@ def _eval_rps(ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
     return out
 
 
+def rps_live(d: pd.DataFrame, h1: pd.DataFrame,
+             m15: pd.DataFrame) -> list:
+    """Live RPS two-step on ready frames (scan.py entry point; the
+    backtest walk calls eval_bar instead — same code path underneath)."""
+    if RPS_PAIR is None:
+        return []
+    return _eval_rps("RPS", d, h1, m15, None)
+
+
 def eval_bar(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
              m15: pd.DataFrame, trace: dict | None = None) -> list:
     """One routine on one bar's frames. Walk and --debug share this so a

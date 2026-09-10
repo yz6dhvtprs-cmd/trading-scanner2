@@ -3,7 +3,7 @@
 ## How to run (everything)
 
 ```bash
-cd /Users/vismaypatel/trading-indicators
+cd ~/trading-indicators
 source .venv/bin/activate            # every fresh shell, always first
 python scanner/scan.py               # nightly-style scan, top-50, prints only
 python scanner/scan.py --pool sp500  # full pool (slower, ~minutes)

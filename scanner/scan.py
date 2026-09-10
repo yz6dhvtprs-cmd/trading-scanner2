@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
 from combos import add_features, level_of, risk_of, signal_mask  # noqa: E402
 from indicators2 import add_extra, alignment  # noqa: E402
 from notify import alert, load_config  # noqa: E402
+from backtest_analyzer import rps_live  # noqa: E402  (same RPS code as --algo RPS)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, "scanner", "signal_log.csv")
@@ -123,6 +124,58 @@ def scan_nightly(frames: dict, algo: dict) -> list:
     return out
 
 
+def download_tf(tickers: list, interval: str) -> dict:
+    """Batched 1mo intraday frames (RPS step-1/2 RSI needs 15m + 1h)."""
+    import yfinance as yf
+    try:
+        px = yf.download(tickers, period="1mo", interval=interval,
+                         auto_adjust=True, progress=False, threads=True,
+                         group_by="ticker")
+    except Exception:
+        return {}
+    frames = {}
+    for t in tickers:
+        try:
+            h = px[t] if len(tickers) > 1 else px
+            h = h.dropna(subset=["Close"])
+            h.columns = [c.capitalize() for c in h.columns]
+            if len(h) > 40:
+                frames[t] = h
+        except Exception:
+            continue
+    return frames
+
+
+def scan_rps(frames: dict, h1_frames: dict, m15_frames: dict,
+             open_keys: set) -> list:
+    """RPS two-step on the last bar per ticker. Alert dicts in the rows
+    schema (strategy RPS, grade B). Skips patterns with an identical open
+    row already in signal_log (intraday.py is tracking those)."""
+    out = []
+    for t, f in frames.items():
+        if t not in h1_frames or t not in m15_frames:
+            continue
+        try:
+            sigs = rps_live(f, h1_frames[t], m15_frames[t])
+        except Exception:
+            continue
+        for s in sigs:
+            side = "long" if s["state"] in (
+                "Long", "Possible upcoming Reversal") else "short"
+            risk = round(abs(float(s["price"]) - float(s["stop"])), 2)
+            if risk <= 0:
+                continue
+            key = f"rps-2step key={s.get('sig_key')}"
+            if (t, "RPS", key) in open_keys:
+                continue
+            out.append({"ticker": t, "variant": "rps-2step", "grade": "B",
+                        "strategy": "RPS", "side": side,
+                        "entry": float(s["price"]), "stop": float(s["stop"]),
+                        "target": "-", "risk": risk, "notes": key,
+                        "confirms": "RPS"})
+    return out
+
+
 def premarket_gate(row: dict, frames_detail) -> str:
     """Re-check one TRIGGERED row against the latest intraday print.
     Returns CONFIRMED / INVALIDATED(reason)."""
@@ -156,6 +209,10 @@ def main() -> int:
                     help="add live 1h/15m stack votes for watchlist+triggered")
     ap.add_argument("--align-min", type=float, default=0.78,
                     help="watchlist light-gate: min 9-MA agreement fraction")
+    ap.add_argument("--rps", action=argparse.BooleanOptionalAction,
+                    default=True,
+                    help="RPS two-step reversal stage (same code as "
+                         "backtester --algo RPS)")
     a = ap.parse_args()
     with open(os.path.join(ROOT, "algo.json")) as f:
         algo = json.load(f)
@@ -189,6 +246,21 @@ def main() -> int:
     print(f"watchlist: {len(watch)} names", flush=True)
 
     rows = scan_nightly(frames, algo)
+
+    if a.rps and frames:
+        syms = sorted(frames)
+        print(f"RPS two-step on {len(syms)} names (1h+15m) ...", flush=True)
+        h1f = download_tf(syms, "1h")
+        m15f = download_tf(syms, "15m")
+        open_keys = set()
+        if os.path.exists(LOG):
+            old = pd.read_csv(LOG)
+            o = old[old["outcome_R"].isna()] if len(old) else old
+            for _, r in o.iterrows():
+                open_keys.add((r["ticker"], r["strategy"], str(r["notes"])))
+        rps_rows = scan_rps(frames, h1f, m15f, open_keys)
+        print(f"RPS: {len(rps_rows)} setups", flush=True)
+        rows += rps_rows
     # attach confirm flags to triggered rows (informational; base untouched)
     for r in rows:
         f = frames[r["ticker"]]
@@ -280,7 +352,7 @@ def main() -> int:
                        "grade": r["grade"], "timeframe": "daily",
                        "status": r["status"], "outcome_R": "",
                        "exit_reason": "", "regime": "", "news_flag": "",
-                       "notes": r["variant"]}]).to_csv(
+                       "notes": r.get("notes", r["variant"])}]).to_csv(
             LOG, mode="a", header=False, index=False)
     if not rows:
         print("(quiet tape: no setups)")
