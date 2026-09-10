@@ -18,7 +18,7 @@ Only CONFIRMED/NEW-with-trigger alerts fire. Everything else stays paper.
 
 ## Alert format (push: Telegram/Pushover/SMS; TradingView backup)
 
-`[A] AAPL LONG pullback 15m | entry 242.10 stop 240.90 tgt 246.90 (4.0R) | CONFIRMED premarket | opt: call debit 240/250 45DTE max-loss $X`
+`[B] - NVDA SHORT - Possible upcoming Rejection - Entry 219.98 - SL 229.52 - Tgt - - opt: put debit spread` (RPS; OLD rows show strategy instead of state, e.g. `[B] - AAPL LONG - breakout (primary) - Entry 326.55 - SL 328.94 - Tgt 319.67 - opt: call debit spread`)
 
 ## Paper gate
 

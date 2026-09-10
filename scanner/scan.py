@@ -170,10 +170,22 @@ def scan_rps(frames: dict, h1_frames: dict, m15_frames: dict,
                 continue
             out.append({"ticker": t, "variant": "rps-2step", "grade": "B",
                         "strategy": "RPS", "side": side,
+                        "state": s["state"],
                         "entry": float(s["price"]), "stop": float(s["stop"]),
                         "target": "-", "risk": risk, "notes": key,
                         "confirms": "RPS"})
     return out
+
+
+def fmt_row(r: dict) -> str:
+    """One alert/print line per setup. RPS rows carry the reversal state;
+    OLD rows carry strategy (variant). No TRIGGERED/CONFIRMED/confirms
+    segments — those stay internal to the row/log lifecycle."""
+    desc = r.get("state") or \
+        f'{r["strategy"]} ({r["variant"]})'
+    return (f'[{r["grade"]}] - {r["ticker"]} {r["side"].upper()} - {desc} '
+            f'- Entry {r["entry"]} - SL {r["stop"]} - Tgt {r["target"]} - '
+            f'opt: {"call" if r["side"] == "long" else "put"} debit spread')
 
 
 def premarket_gate(row: dict, frames_detail) -> str:
@@ -337,11 +349,7 @@ def main() -> int:
                 print("  ", res)
 
     for r in rows:
-        msg = (f"[{r['grade']}] {r['ticker']} {r['side'].upper()} "
-               f"{r['strategy']} ({r['variant']}) | entry {r['entry']} "
-               f"stop {r['stop']} tgt {r['target']} | {r['status']} | "
-               f"confirms {r.get('confirms', '-')}{tag(r['ticker'])} | "
-               f"opt: {'call' if r['side']=='long' else 'put'} debit spread")
+        msg = fmt_row(r) + tag(r["ticker"])
         print(msg)
         for res in alert(msg, chans, cfg, title=f"{r['ticker']} signal"):
             print("  ", res)
