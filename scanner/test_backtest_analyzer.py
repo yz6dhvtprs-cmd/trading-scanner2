@@ -95,6 +95,7 @@ def t_change_only_hits():
     assert len(hits) == 1, [h["state"] for h in hits]  # Long fires twice
     assert hits[0]["state"] == "Long"
     assert hits[0]["id"] == 1 and "ts" in hits[0]
+    assert hits[0]["grade"] == "B"  # stub note is not a backtested trigger
     # hit timestamp = bar close of the first firing bar (bars 0-2 skip: no
     # completed 1h bar yet, so evaluation starts at bar 3)
     assert hits[0]["time"] == m15.index[3] + pd.Timedelta(minutes=15)
@@ -133,11 +134,26 @@ def t_reappearing_state_rehits():
 def t_fmt_shape():
     hit = {"id": 7, "time": pd.Timestamp("2026-09-08 16:15", tz=ET),
            "state": "Possible upcoming Rejection", "price": 100.0,
-           "target": "90.00", "stop": 101.0, "note": "n"}
+           "target": "90.00", "stop": 101.0, "note": "n",
+           "grade": "C", "grade_why": "w"}
     line = _bt.fmt("XOM", hit)
-    assert line.startswith('#7 2026-09-08 13:15PT "XOM - Possible upcoming '
-                           'Rejection - Short @ 100.0 - SL 101.0 - target '
-                           '90.00. (n)"'), line
+    assert line.startswith('#7 2026-09-08 13:15PT "[C] XOM - Possible '
+                           'upcoming Rejection - Short @ 100.0 - SL 101.0 - '
+                           'target 90.00. (n)"'), line
+
+
+def t_grades_mirror_main():
+    # Long takes its backtested variant grade from algo.json
+    g, why = _bt.grade_of("Long", "breakout trigger D/UP 1h/UP 15m/UP")
+    assert g == "A", (g, why)
+    g, why = _bt.grade_of("Long", "pullback trigger D/UP 1h/UP 15m/UP")
+    assert g == "B+", (g, why)
+    # short-bias rejection sits at C (paused), exactly like the main book
+    g, why = _bt.grade_of("Possible upcoming Rejection", "doji at 20d-high")
+    assert g == "C", (g, why)
+    # reversal is a valid pattern with no backtested variant -> B (thin)
+    g, why = _bt.grade_of("Possible upcoming Reversal", "hammer at support")
+    assert g == "B", (g, why)
 
 
 def t_parse_ids():
@@ -180,7 +196,7 @@ def t_trace_skip_reasons():
 
 TESTS = [t_slices_causal, t_forming_bar_ohlc, t_change_only_hits,
          t_reappearing_state_rehits, t_fmt_shape, t_parse_ids,
-         t_trace_rejection_fires, t_trace_skip_reasons]
+         t_trace_rejection_fires, t_trace_skip_reasons, t_grades_mirror_main]
 
 
 def main() -> int:

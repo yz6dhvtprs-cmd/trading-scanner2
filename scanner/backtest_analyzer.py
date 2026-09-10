@@ -21,6 +21,7 @@ as Possible Rejection).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -37,6 +38,43 @@ PT = "America/Los_Angeles"
 MIN_DAILY = 121   # swing_levels reads a 120-bar lookback
 MIN_TF = 35       # ema21 + MACD(12,26,9) warmup on 1h/15m
 H1_WARMUP_DAYS = 15  # extra 1h history behind the window, indicators only
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+_ALGO = None
+
+
+def _algo_variants():
+    """(strategy, side) -> grade from algo.json (the 10y backtest verdicts
+    the nightly scanner alerts with; read live so re-grades apply)."""
+    global _ALGO
+    if _ALGO is None:
+        try:
+            algo = json.load(open(os.path.join(ROOT, "algo.json")))
+            _ALGO = {(v["strategy"], v["side"]): v["grade"]
+                     for v in algo.get("variants", [])}
+        except Exception:
+            _ALGO = {}
+    return _ALGO
+
+
+def grade_of(state: str, note: str) -> tuple:
+    """(grade, why), mirroring the main analysis exactly:
+    Long takes its backtested variant's grade from algo.json (breakout=A,
+    pullback=B+); short-bias rejection sits at C (paused) per algo.json +
+    GRADES.md; reversal is a valid pattern with no backtested variant, so B
+    (thin/unproven) per the GRADES.md rubric."""
+    n = (note or "").lower()
+    if state == "Long":
+        for strat in ("breakout", "pullback"):
+            if strat in n:
+                g = _algo_variants().get((strat, "long"), "?")
+                return g, f"algo.json {strat}-long variant"
+        return "B", "long trigger is not a backtested variant"
+    if state == "Possible upcoming Rejection":
+        return "C", "short bias paused per algo.json; GRADES.md shorts=C"
+    if state == "Possible upcoming Reversal":
+        return "B", "valid pattern, no backtested variant (thin/unproven)"
+    return "B", "no backtested variant"
 
 
 def fetch(ticker: str, days: int):
@@ -118,8 +156,10 @@ def walk(ticker: str, d_full: pd.DataFrame, h1_full: pd.DataFrame,
             continue
         for r in results:
             if r["state"] not in active:
+                grade, why = grade_of(r["state"], r.get("note", ""))
                 hits.append({"id": len(hits) + 1, "ts": ts,
-                             "time": ts + pd.Timedelta(minutes=15), **r})
+                             "time": ts + pd.Timedelta(minutes=15),
+                             "grade": grade, "grade_why": why, **r})
         active = {r["state"] for r in results}
     stats = {"scanned": scanned, "evaluated": evaluated, "skipped": skipped,
              "errors": errors}
@@ -133,9 +173,9 @@ _SIDE = {"Long": "Buy", "Possible upcoming Rejection": "Short",
 def fmt(ticker: str, hit: dict) -> str:
     ts = hit["time"].tz_convert(PT).strftime("%Y-%m-%d %H:%MPT")
     side = _SIDE.get(hit["state"], "?")
-    return (f'#{hit["id"]} {ts} "{ticker} - {hit["state"]} - {side} @ '
-            f'{hit["price"]} - SL {hit["stop"]} - target {hit["target"]}. '
-            f'({hit["note"]})"')
+    return (f'#{hit["id"]} {ts} "[{hit.get("grade", "?")}] {ticker} - '
+            f'{hit["state"]} - {side} @ {hit["price"]} - '
+            f'SL {hit["stop"]} - target {hit["target"]}. ({hit["note"]})"')
 
 
 def parse_ids(s: str) -> list:
@@ -158,6 +198,8 @@ def parse_ids(s: str) -> list:
 def print_trace(ticker: str, hit: dict, tr: dict) -> None:
     """Human-readable dump of one setup's gate decisions."""
     print(f'--- DEBUG #{hit["id"]} ' + fmt(ticker, hit), flush=True)
+    print(f'  grade={hit.get("grade", "?")} ({hit.get("grade_why", "")})',
+          flush=True)
     dl = tr.get("daily_last", {})
     print(f'  forming daily O/H/L/C/V={dl} prev_close={tr.get("daily_prev_close")}',
           flush=True)
