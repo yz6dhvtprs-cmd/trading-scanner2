@@ -80,6 +80,20 @@ def drop_list(cfg: dict, num: str):
     cfg.setdefault("blocked", {})[num] = dt.date.today().isoformat()
 
 
+def _canon_cmd(body: str) -> str:
+    """Canonical command word, or "" for non-command chatter. STOP/START
+    map to UNSUBSCRIBE/SUBSCRIBE so they never silently do nothing."""
+    w = (body or "").upper().split()
+    if not w:
+        return ""
+    w = w[0]
+    if w == "STOP":
+        return "UNSUBSCRIBE"
+    if w == "START":
+        return "SUBSCRIBE"
+    return w if w in ("SUBSCRIBE", "PAUSE", "RESUME", "UNSUBSCRIBE") else ""
+
+
 def blob_text(blob) -> str:
     """RCS bodies often live in attributedBody (text column NULL). The blob
     is a binary plist wrapping an archiver stream; command keywords survive
@@ -159,7 +173,8 @@ def main() -> int:
         return 0
     if msgs and not st:
         # first run: establish cursor, don't backfill history
-        st = {"last_rowid": max(r for r, _, _, _ in msgs)}
+        st = {"last_rowid": max(r for r, _, _, _, _ in msgs),
+              "seen": sorted({r for r, _, _, _, _ in msgs})[-5000:]}
         json.dump(st, open(ISTATE, "w"))
         print(f"inbox: cursor set, {len(msgs)} old texts ignored", flush=True)
         return 0
@@ -171,12 +186,25 @@ def main() -> int:
     _d = st.get("done", {})
     done = {k: 0 for k in _d} if isinstance(_d, list) else dict(_d)
     seen_run = set()
-    # last-text-wins: only each sender's NEWEST command acts; older rows in
-    # the same burst are superseded, never replayed one by one.
+    # Idempotency: every chat.db row acts at most once. The 2h stale-sweep
+    # refetches handled rows, and relay duplicates resurface them, so without
+    # this a handled UNSUBSCRIBE re-fires ("Not subscribed" spam) and a
+    # handled SUBSCRIBE resurrects unsubscribed numbers. Seen rowids persist
+    # in inbox_state.json; the cursor still advances over everything fetched.
+    seen = set(st.get("seen", []))
+    if msgs:
+        st["last_rowid"] = max(st.get("last_rowid", 0),
+                               max(r for r, _, _, _, _ in msgs))
+    fresh_msgs = [m for m in msgs if m[0] not in seen]
+    for r, _, _, _, _ in msgs:
+        seen.add(r)
+    # last-text-wins over COMMANDS only: each sender's newest command acts;
+    # older rows in the burst are superseded (never replayed one by one),
+    # and non-command chatter never swallows a pending command.
     latest = {}
-    for rowid, sender, body, svc, fresh in msgs:
+    for rowid, sender, body, svc, fresh in fresh_msgs:
         s = norm(sender)
-        if body and (s not in latest or rowid > latest[s][0]):
+        if _canon_cmd(body) and (s not in latest or rowid > latest[s][0]):
             latest[s] = (rowid, body, svc, fresh)
     msgs = [(r, s, b, v, f) for s, (r, b, v, f) in latest.items()]
     for rowid, sender, body, svc, fresh in msgs:
@@ -196,6 +224,10 @@ def main() -> int:
         done[cmd_key] = now_ep
         parts = body.upper().split()
         cmd, arg = parts[0], (parts[1] if len(parts) > 1 else "")
+        if cmd == "STOP":
+            cmd = "UNSUBSCRIBE"  # STOP unsubscribes, never silently ignored
+        elif cmd == "START":
+            cmd = "SUBSCRIBE"
         # house rule: inbound may be RCS/iMessage/SMS; outbound is ALWAYS SMS
         svc_in = "SMS"
         reply, rsvc = None, svc_in
@@ -257,8 +289,11 @@ def main() -> int:
         elif cmd == "UNSUBSCRIBE":
             drop_list(cfg, sender)
             paused.pop(sender, None)
-            for k in [k for k in done if k.startswith(sender + "|")]:
-                del done[k]  # allow a future SUBSCRIBE through
+            for k in [k for k in done
+                      if k.startswith(sender + "|SUBSCRIBE") or
+                      k.startswith(sender + "|START")]:
+                del done[k]  # allow a future SUBSCRIBE through; keep this
+                # UNSUBSCRIBE key so the same row never re-confirms next poll
             reply = "Unsubscribed. Text SUBSCRIBE to rejoin."
         if reply:
             print(f"inbox: {sender} -> {cmd} ({svc_in})", flush=True)
@@ -270,8 +305,9 @@ def main() -> int:
     cfg["paused"] = {k: v for k, v in paused.items() if v >= today}
     if not dry:
         save_config(cfg)
-        if msgs:
-            st["last_rowid"] = max(r for r, _, _, _, _ in msgs)
+        # last_rowid already advanced over everything fetched above (it must
+        # never regress to a collapsed subset); persist acted rowids here.
+        st["seen"] = sorted(seen)[-5000:]
         st["done"] = dict(sorted(done.items(), key=lambda kv: -kv[1])[:200])
         json.dump(st, open(ISTATE, "w"))
     else:
