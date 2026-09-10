@@ -94,6 +94,7 @@ def t_change_only_hits():
     assert stats["scanned"] == len(m15), stats
     assert len(hits) == 1, [h["state"] for h in hits]  # Long fires twice
     assert hits[0]["state"] == "Long"
+    assert hits[0]["id"] == 1 and "ts" in hits[0]
     # hit timestamp = bar close of the first firing bar (bars 0-2 skip: no
     # completed 1h bar yet, so evaluation starts at bar 3)
     assert hits[0]["time"] == m15.index[3] + pd.Timedelta(minutes=15)
@@ -130,17 +131,56 @@ def t_reappearing_state_rehits():
 
 
 def t_fmt_shape():
-    hit = {"time": pd.Timestamp("2026-09-08 16:15", tz=ET),
+    hit = {"id": 7, "time": pd.Timestamp("2026-09-08 16:15", tz=ET),
            "state": "Possible upcoming Rejection", "price": 100.0,
            "target": "90.00", "stop": 101.0, "note": "n"}
     line = _bt.fmt("XOM", hit)
-    assert line.startswith('2026-09-08 13:15PT "XOM - Possible upcoming '
+    assert line.startswith('#7 2026-09-08 13:15PT "XOM - Possible upcoming '
                            'Rejection - Short @ 100.0 - SL 101.0 - target '
                            '90.00. (n)"'), line
 
 
+def t_parse_ids():
+    assert _bt.parse_ids("1") == [1]
+    assert _bt.parse_ids("1,3-4") == [1, 3, 4]
+    assert _bt.parse_ids(" 2 - 3 ,2") == [2, 3]
+    for bad in ("", "0", "x", "1-"):
+        try:
+            _bt.parse_ids(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"parse_ids({bad!r}) should raise")
+
+
+def t_trace_rejection_fires():
+    import test_analyze as _ta
+    from analyze import analyze as _analyze
+    d, h1, m15 = _ta._rejection_frames()
+    tr: dict = {}
+    res = _analyze("T", d, h1, m15, trace=tr)
+    assert [r["state"] for r in res] == ["Possible upcoming Rejection"], res
+    assert tr["votes"] == {"D": "UP", "1h": "UP", "15m": "DN"}, tr["votes"]
+    assert tr["fired"] == ["Possible upcoming Rejection"]
+    fire = [c for c in tr["checks"] if "FIRE" in c]
+    assert len(fire) == 1 and "20d-high" in fire[0], tr["checks"]
+    assert any(c.startswith("base breakout:") for c in tr["checks"])
+    assert tr["m15_last"], tr
+
+
+def t_trace_skip_reasons():
+    import test_analyze as _ta
+    from analyze import analyze as _analyze
+    d, h1, m15 = _ta._rejection_frames(m15_dn=False)  # 15m never flips
+    tr: dict = {}
+    res = _analyze("T", d, h1, m15, trace=tr)
+    assert res == [], res
+    assert tr["fired"] == []
+    assert any("15m not DN" in c for c in tr["checks"]), tr["checks"]
+
+
 TESTS = [t_slices_causal, t_forming_bar_ohlc, t_change_only_hits,
-         t_reappearing_state_rehits, t_fmt_shape]
+         t_reappearing_state_rehits, t_fmt_shape, t_parse_ids,
+         t_trace_rejection_fires, t_trace_skip_reasons]
 
 
 def main() -> int:

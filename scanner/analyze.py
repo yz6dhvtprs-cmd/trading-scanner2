@@ -145,13 +145,38 @@ def tf_up(f: pd.DataFrame) -> str:
         return "?"
 
 
+def _vote_inputs(f: pd.DataFrame) -> dict:
+    """Underlying numbers behind one tf_up() vote (debug/trace only)."""
+    try:
+        out = {"close": round(float(f["Close"].iloc[-1]), 2),
+               "ema21": round(float(f["ema21"].iloc[-1]), 2)}
+        if "macd" in f.columns and np.isfinite(float(f["macd"].iloc[-1])):
+            out["macd"] = round(float(f["macd"].iloc[-1]), 4)
+            out["macd_sig"] = round(float(f["macd_sig"].iloc[-1]), 4)
+        return out
+    except Exception:
+        return {}
+
+
+def _bar_ohlc(f: pd.DataFrame):
+    out = {}
+    for k in ("Open", "High", "Low", "Close", "Volume"):
+        try:
+            out[k] = round(float(f[k].iloc[-1]), 2)
+        except Exception:
+            continue
+    return out
+
+
 def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
-            m15: pd.DataFrame) -> list:
+            m15: pd.DataFrame, trace: dict | None = None) -> list:
     """All qualified states for one ticker (Long coexists with reversal /
     rejection — a new qualifier alerts even when Long already fired).
     Every returned state carries direction + entry + S/R target + stop.
     Base-signal stops stay risk-based (validated); everything else reads off
-    support/resistance + Fib + EMA/MA levels on daily and 1h."""
+    support/resistance + Fib + EMA/MA levels on daily and 1h.
+    Pass trace={} to also fill it with the per-gate decision detail
+    (votes with inputs, level distances, first-failing gate, RR math)."""
     out = []
     i = len(d) - 1
     c = float(d["Close"].iloc[i])
@@ -163,6 +188,24 @@ def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
     rsi = float(d["rsi"].iloc[i])
     sup, res = swing_levels(d)
     votes = {"D": tf_up(d), "1h": tf_up(h1), "15m": tf_up(m15)}
+    tr = trace
+    if tr is not None:
+        tr.update({
+            "ticker": t, "entry": round(c, 2), "rsi": round(rsi, 2),
+            "rvol": round(float(d["rvol"].iloc[i]), 2),
+            "adx": round(float(d["adx"].iloc[i]), 1),
+            "hi20": round(hi20, 2), "lo20": round(lo20, 2),
+            "pats_last3": sorted(pats),
+            "supports": sup, "resistances": res,
+            "daily_last": _bar_ohlc(d),
+            "daily_prev_close": round(float(d["Close"].iloc[i - 1]), 2)
+            if i > 0 else None,
+            "m15_last": _bar_ohlc(m15),
+            "votes": dict(votes),
+            "vote_inputs": {k: _vote_inputs(f) for k, f in
+                            (("D", d), ("1h", h1), ("15m", m15))},
+            "checks": [],
+        })
 
     def objective(direction: int):
         """Nearest S/R objective + Fib extension in trade direction."""
@@ -177,7 +220,13 @@ def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
     # 1. base signals first (at most one Long; breakout has priority).
     # Stops stay validated risk-based; RVOL uses the live relaxation.
     for sname in ("breakout", "pullback"):
-        if signal_mask(d, sname, 1, 20.0, RVOL_MIN)[i]:
+        mask = bool(signal_mask(d, sname, 1, 20.0, RVOL_MIN)[i])
+        if tr is not None:
+            tr["checks"].append(
+                f"base {sname}: mask={mask} "
+                f"(rvol {tr['rvol']} vs {RVOL_MIN}, "
+                f"adx {tr['adx']} vs 20)")
+        if mask:
             risk = risk_of(d, sname, 1, i)
             stop = c - risk
             tgt, ext = objective(1)
@@ -208,13 +257,37 @@ def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
             rr = (c - float(tgt_txt)) / (lvl * 1.005 - c) \
                 if lvl * 1.005 > c else 0
             if rr < 1.0:
+                if tr is not None:
+                    tr["checks"].append(
+                        f"reject {name}={lvl:.2f}: RR {rr:.2f} < 1 -> skip")
                 continue
+            if tr is not None:
+                dist = abs(c - lvl) / lvl
+                tr["checks"].append(
+                    f"reject {name}={lvl:.2f}: dist {dist:.2%}, "
+                    f"bear_pat {sorted(pats & set(BEAR_PAT))}, "
+                    f"rsi {rsi:.1f}>55, D+1h UP, 15m DN, RR {rr:.2f} -> FIRE")
             out.append({"state": "Possible upcoming Rejection",
                         "price": round(c, 2), "target": tgt_txt,
                         "stop": round(lvl * 1.005, 2),
                         "note": f"{sorted(pats & set(BEAR_PAT))[0]} at {name} "
                                 f"{lvl:.2f} " + _votes(votes)})
             break
+        elif tr is not None:
+            dist = abs(c - lvl) / lvl if lvl else 1.0
+            why = []
+            if not near(c, lvl, ZONE_TOL):
+                why.append(f"dist {dist:.2%} > tol 1%")
+            if not bear_pat:
+                why.append(f"no bear pattern{pats}")
+            if not rsi > 55:
+                why.append(f"rsi {rsi:.1f}<=55")
+            if not up_ctx:
+                why.append(f"no D+1h UP {votes}")
+            if not m15_dn:
+                why.append("15m not DN")
+            tr["checks"].append(
+                f"reject {name}={lvl:.2f}: " + "; ".join(why) + " -> skip")
     # 3. reversal (long bias): 20d-low / Fib / support + hammer + washed out
     bull_pat = bool(pats & set(BULL_PAT))
     rlevels = [("20d-low", lo20)] + [(f"fib{r}", v) for r, v in fib.items()]
@@ -228,13 +301,39 @@ def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
             rr = (float(tgt_txt) - c) / (c - lvl * 0.995) \
                 if c > lvl * 0.995 else 0
             if rr < 1.0:
+                if tr is not None:
+                    tr["checks"].append(
+                        f"reverse {name}={lvl:.2f}: RR {rr:.2f} < 1 -> skip")
                 continue
+            if tr is not None:
+                dist = abs(c - lvl) / lvl
+                tr["checks"].append(
+                    f"reverse {name}={lvl:.2f}: dist {dist:.2%}, "
+                    f"bull_pat {sorted(pats & set(BULL_PAT))}, "
+                    f"rsi {rsi:.1f}<45, D+1h DN, 15m UP, RR {rr:.2f} -> FIRE")
             out.append({"state": "Possible upcoming Reversal",
                         "price": round(c, 2), "target": tgt_txt,
                         "stop": round(lvl * 0.995, 2),
                         "note": f"{sorted(pats & set(BULL_PAT))[0]} at {name} "
                                 f"{lvl:.2f} " + _votes(votes)})
             break
+        elif tr is not None:
+            dist = abs(c - lvl) / lvl if lvl else 1.0
+            why = []
+            if not near(c, lvl, ZONE_TOL):
+                why.append(f"dist {dist:.2%} > tol 1%")
+            if not bull_pat:
+                why.append(f"no bull pattern{pats}")
+            if not rsi < 45:
+                why.append(f"rsi {rsi:.1f}>=45")
+            if not dn_ctx:
+                why.append(f"no D+1h DN {votes}")
+            if not m15_up:
+                why.append("15m not UP")
+            tr["checks"].append(
+                f"reverse {name}={lvl:.2f}: " + "; ".join(why) + " -> skip")
+    if tr is not None:
+        tr["fired"] = [r["state"] for r in out]
     return out
 
 

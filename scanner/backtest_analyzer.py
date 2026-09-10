@@ -9,7 +9,10 @@ Prints one line per NEWLY appearing state (live change-only semantics).
 
 Usage:
     python scanner/backtest_analyzer.py [--ticker TICKER] [--days N]
+        [--debug 1,3-4]
 Missing args are prompted. No alerts, no state writes, no lookahead.
+Every printed setup gets a unique #id; --debug replays the named setups
+with the full per-gate decision trace.
 
 Continuations surface as Long (breakout/pullback triggers); there is no
 SHORT leg while shorts stay paused per algo.json (short bias reads print
@@ -115,7 +118,8 @@ def walk(ticker: str, d_full: pd.DataFrame, h1_full: pd.DataFrame,
             continue
         for r in results:
             if r["state"] not in active:
-                hits.append({"time": ts + pd.Timedelta(minutes=15), **r})
+                hits.append({"id": len(hits) + 1, "ts": ts,
+                             "time": ts + pd.Timedelta(minutes=15), **r})
         active = {r["state"] for r in results}
     stats = {"scanned": scanned, "evaluated": evaluated, "skipped": skipped,
              "errors": errors}
@@ -129,15 +133,61 @@ _SIDE = {"Long": "Buy", "Possible upcoming Rejection": "Short",
 def fmt(ticker: str, hit: dict) -> str:
     ts = hit["time"].tz_convert(PT).strftime("%Y-%m-%d %H:%MPT")
     side = _SIDE.get(hit["state"], "?")
-    return (f'{ts} "{ticker} - {hit["state"]} - {side} @ {hit["price"]} - '
-            f'SL {hit["stop"]} - target {hit["target"]}. ({hit["note"]})"')
+    return (f'#{hit["id"]} {ts} "{ticker} - {hit["state"]} - {side} @ '
+            f'{hit["price"]} - SL {hit["stop"]} - target {hit["target"]}. '
+            f'({hit["note"]})"')
+
+
+def parse_ids(s: str) -> list:
+    """'1,3-4' -> [1, 3, 4]. Raises ValueError on bad input."""
+    out = []
+    for part in s.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            lo, hi = part.split("-", 1)
+            out.extend(range(int(lo), int(hi) + 1))
+        else:
+            out.append(int(part))
+    if not out or any(i < 1 for i in out):
+        raise ValueError(f"bad --debug ids: {s!r}")
+    return sorted(set(out))
+
+
+def print_trace(ticker: str, hit: dict, tr: dict) -> None:
+    """Human-readable dump of one setup's gate decisions."""
+    print(f'--- DEBUG #{hit["id"]} ' + fmt(ticker, hit), flush=True)
+    dl = tr.get("daily_last", {})
+    print(f'  forming daily O/H/L/C/V={dl} prev_close={tr.get("daily_prev_close")}',
+          flush=True)
+    print(f'  15m bar O/H/L/C/V={tr.get("m15_last")}', flush=True)
+    for tf in ("D", "1h", "15m"):
+        vi = tr.get("vote_inputs", {}).get(tf, {})
+        print(f'  vote {tf}={tr.get("votes", {}).get(tf)} inputs={vi}',
+              flush=True)
+    print(f'  rsi={tr.get("rsi")} adx={tr.get("adx")} rvol={tr.get("rvol")} '
+          f'hi20={tr.get("hi20")} lo20={tr.get("lo20")} '
+          f'pats={tr.get("pats_last3")}', flush=True)
+    print(f'  supports={tr.get("supports")} resistances={tr.get("resistances")}',
+          flush=True)
+    for c in tr.get("checks", []):
+        print(f'  {c}', flush=True)
+    print(f'  fired={tr.get("fired")}', flush=True)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ticker", default="")
     ap.add_argument("--days", default="")
+    ap.add_argument("--debug", default="",
+                    help="setup ids to trace, e.g. '1' or '1,3-4'")
     a = ap.parse_args()
+    try:
+        debug_ids = parse_ids(a.debug) if a.debug.strip() else []
+    except ValueError as e:
+        print(e, flush=True)
+        return 1
     ticker = (a.ticker or input("Ticker: ")).strip().upper()
     days_raw = (str(a.days) or input("Days of 15m/1h history (1-60): ")) \
         .strip()
@@ -173,6 +223,25 @@ def main() -> int:
     print(f"done: {len(hits)} trade setups | {stats['evaluated']} bars "
           f"evaluated, {stats['skipped']} warmup-skipped, "
           f"{stats['errors']} errors", flush=True)
+    if debug_ids:
+        by_id = {h["id"]: h for h in hits}
+        unknown = [i for i in debug_ids if i not in by_id]
+        if unknown:
+            print(f"--debug: unknown setup ids {unknown} "
+                  f"(have 1..{len(hits)})", flush=True)
+            return 1
+        for i in debug_ids:
+            h = by_id[i]
+            sl = slices_for(d_full, h1_full, m15_full, h["ts"])
+            if sl is None:
+                print(f"--debug #{i}: bar no longer sliceable", flush=True)
+                return 1
+            tr: dict = {}
+            re_fired = [r["state"] for r in analyze(ticker, *sl, trace=tr)]
+            print_trace(ticker, h, tr)
+            if h["state"] not in re_fired:
+                print(f"  WARNING: replay fired {re_fired}, hit was "
+                      f'{h["state"]} (non-deterministic?)', flush=True)
     return 0
 
 
