@@ -224,8 +224,27 @@ def _trend_frame():
     return _daily(n, cl, hi, lo)
 
 
+def _fresh_break_frame():
+    """30 bars: rising baseline, fractal low anchors at 8/18, last close
+    0.6xATR under the up-line: a fresh break (dist in [0.5, 2.0])."""
+    n = 30
+    base = 100 + 0.3 * np.arange(n)
+    lo = base - 0.5
+    hi = base + 0.3
+    lo[8] -= 1.5
+    lo[18] -= 1.0
+    hi[8] += 1.5
+    hi[18] += 1.0
+    cl = np.array(base, float)
+    cl[29] = 107.15  # line(29) = 107.75 -> dist 0.6xATR
+    hi = np.array(hi, float)
+    lo = np.array(lo, float)
+    hi[29], lo[29] = 108.0, 106.8
+    return _daily(n, cl, hi, lo)
+
+
 def t_r3_break_fires():
-    d = _trend_frame()
+    d = _fresh_break_frame()
     tr: dict = {}
     res = r3_trendline(d, trace=tr)
     assert len(res) == 1, tr.get("checks")
@@ -233,27 +252,40 @@ def t_r3_break_fires():
     assert r["state"] == "Possible upcoming Rejection" and r["algo"] == "R3"
     assert "tl-break" in r["note"] and "fill=line" in r["note"]
     assert r["sig_key"][0] == "R3" and r["sig_key"][1] == "top"
-    # entry is the line cross, not the chase-close (115+ crash distance)
+    # entry is the line cross (107.65), not the chase-close (107.15)
     assert r["price"] > float(d["Close"].iloc[-1]), r
     assert r["price"] < float(d["High"].iloc[-10:].max()), r
-    # stale pivot (bar-34 high) sits under the line entry: hi10 fallback
-    assert r["stop"] == round(float(d["High"].iloc[39]) + 0.25, 2), r
+    assert r["stop"] == round(float(d["High"].iloc[-10:].max()) + 0.25, 2), r
     assert "sl=hi10" in r["note"] and r["stop"] > r["price"]
+
+
+def t_r3_stale_break_skips():
+    # crash frame: close ~9xATR past the line (late anchors, runaway
+    # move) -> stale, no setup even though the geometric break is huge
+    d = _trend_frame()
+    tr: dict = {}
+    assert r3_trendline(d, trace=tr) == []
+    assert any("stale" in c for c in tr["checks"]), tr["checks"]
 
 
 def t_r3_stop_prefers_pivot():
     d = _trend_frame()
-    stop, src = _r3_stop(d, "up", 100.0, 1.0)
+    stop, src = _r3_stop(d, "up", 100.0, 10.0)
     assert src == "pivot" and \
-        abs(stop - (float(d["High"].iloc[34]) + 0.25)) < 1e-9, (stop, src)
-    stop, src = _r3_stop(d, "dn", 120.0, 1.0)
+        abs(stop - (float(d["High"].iloc[34]) + 2.5)) < 1e-9, (stop, src)
+    stop, src = _r3_stop(d, "dn", 120.0, 10.0)
     assert src == "pivot" and \
-        abs(stop - (float(d["Low"].iloc[22]) - 0.25)) < 1e-9, (stop, src)
+        abs(stop - (float(d["Low"].iloc[22]) - 2.5)) < 1e-9, (stop, src)
     # degenerate pinch (stop on top of entry): 0.5xATR min-risk floor
     stop, src = _r3_stop(d, "up", 110.70, 1.0)
     assert src == "minrisk" and abs(stop - 111.20) < 1e-9, (stop, src)
     stop, src = _r3_stop(d, "dn", 105.20, 1.0)
     assert src == "minrisk" and abs(stop - 104.70) < 1e-9, (stop, src)
+    # stale anchor (pivot 10xATR away): 2xATR maximum cap
+    stop, src = _r3_stop(d, "up", 100.0, 1.0)
+    assert src == "cap" and abs(stop - 102.0) < 1e-9, (stop, src)
+    stop, src = _r3_stop(d, "dn", 120.0, 1.0)
+    assert src == "cap" and abs(stop - 118.0) < 1e-9, (stop, src)
 
 
 def t_r3_no_break_no_trade():
@@ -264,29 +296,29 @@ def t_r3_no_break_no_trade():
 
 
 def t_r3_bull_mirror():
-    n = 40
+    n = 30
     base = 120 - 0.3 * np.arange(n)
     lo = base - 0.5
     hi = base + 0.3
-    hi[10] += 1.5
-    hi[22] += 1.0
-    lo[16] -= 1.5  # separating low so both highs survive the merge
-    cl = list(base[:35]) + [116.0, 119.0, 121.0, 122.0, 122.5]
-    cl = np.array(cl, float)
+    hi[8] += 1.5
+    hi[18] += 1.0
+    lo[13] -= 1.5  # separating low so both highs survive the merge
+    cl = np.array(base, float)
+    cl[29] = 112.76  # dn-line(29) = 112.16 -> fresh break, dist 0.6xATR
     hi = np.array(hi, float)
     lo = np.array(lo, float)
-    hi[35:] = cl[35:] + 0.3
-    lo[35:] = cl[35:] - 0.5
+    hi[29], lo[29] = 113.1, 112.2
     d = _daily(n, cl, hi, lo)
     tr: dict = {}
     res = r3_trendline(d, trace=tr)
     assert len(res) == 1, tr.get("checks")
     assert res[0]["state"] == "Possible upcoming Reversal"
-    # spike-run: line far below anything traded in 5 bars -> close fill,
-    # pivot stop still on the valid side
-    assert "fill=close" in res[0]["note"] and "sl=pivot" in res[0]["note"], \
+    # entry is the line cross (112.26), under the chase-close (112.76)
+    assert "fill=line" in res[0]["note"] and "sl=lo10" in res[0]["note"], \
         res[0]
-    assert res[0]["price"] == round(float(d["Close"].iloc[-1]), 2), res[0]
+    assert res[0]["price"] < float(d["Close"].iloc[-1]), res[0]
+    assert res[0]["stop"] == round(float(d["Low"].iloc[-10:].min()) - 0.25,
+                                   2), res[0]
     assert res[0]["stop"] < res[0]["price"]
 
 
@@ -592,8 +624,8 @@ TESTS = [t_fractal_pivots, t_r1_bottom_fires, t_r1_bottom_no_trigger,
          t_r1_top_fires, t_r1_top_failed_failure_is_no_trade,
          t_zigzag_confirms_on_atr_move, t_tema_math_and_stack,
          t_r2_bear_fires_at_breakdown, t_r2_shallow_pullback_skips,
-         t_r3_break_fires, t_r3_stop_prefers_pivot, t_r3_no_break_no_trade,
-         t_r3_bull_mirror,
+         t_r3_break_fires, t_r3_stale_break_skips, t_r3_stop_prefers_pivot,
+         t_r3_no_break_no_trade, t_r3_bull_mirror,
          t_r4_overshoot_and_confirm, t_r5_flip_fires, t_r5_bull_mirror,
          t_r6_break_fires, t_r6_bear_mirror, t_r7_divergence_fires,
          t_r7_bull_mirror, t_r8_fade_fires, t_r8_bull_mirror,

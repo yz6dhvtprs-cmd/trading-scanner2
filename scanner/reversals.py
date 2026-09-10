@@ -368,6 +368,12 @@ def r2_zigzag_tema(df: pd.DataFrame, trace: dict | None = None) -> list:
 
 R3_FILL_ATR = 0.1  # entry sits this far past the line (conservative
                   # fill on the crossed path, not the chase-close)
+SL_MAX_ATR = 2.0  # stop can never sit farther than this from entry: a
+                  # stale pivot 10%+ away makes R-multiples meaningless
+                  # (a "win" the stop never threatened)
+R3_MAX_DIST_ATR = 2.0  # break freshness: a close more than this past
+                  # the line is a stale line + runaway move (late
+                  # anchors), not a tradable break -> skip
 R3_BREAK_ATR = 0.5  # trend-line break magnitude (the page: false breaks are
                     # common; the magnitude of the break is the key)
 
@@ -392,9 +398,10 @@ def _r3_stop(df: pd.DataFrame, side: str, entry: float,
     """(stop, source): structural stop guaranteed on the valid side of
     `entry`. Prefers the recent swing pivot; falls back to the 10-bar
     extreme when the pivot is stale (a crash can leave every recent
-    pivot on the wrong side of entry); then entry -/+ 0.5xATR; and a
+    pivot on the wrong side of entry); then entry -/+ 0.5xATR; a
     0.5xATR minimum-risk floor so a stop printing on top of entry can
-    never manufacture a lottery win."""
+    never manufacture a lottery win; and a 2xATR maximum cap so a stale
+    anchor 10%+ away can never hollow out the R-multiple."""
     buf = R1_SL_BUF_ATR * atr
     if side == "up":  # short: stop must sit OVER entry
         hs = _recent_pivots(df, "H", 30)
@@ -415,6 +422,10 @@ def _r3_stop(df: pd.DataFrame, side: str, entry: float,
     if abs(entry - stop) < 0.5 * atr:  # degenerate pinch: enforce min risk
         stop = entry + 0.5 * atr if side == "up" else entry - 0.5 * atr
         src = "minrisk"
+    if abs(entry - stop) > SL_MAX_ATR * atr:  # stale anchor: cap the risk
+        stop = entry + SL_MAX_ATR * atr if side == "up" \
+            else entry - SL_MAX_ATR * atr
+        src = "cap"
     return stop, src
 
 
@@ -447,7 +458,10 @@ def r3_trendline(df: pd.DataFrame, trace: dict | None = None) -> list:
         d2 = df.index[p2[0]].date().isoformat()
         if side == "up":
             dist = (lv - close) / atr
-            if close < lv - R3_BREAK_ATR * atr:
+            if dist > R3_MAX_DIST_ATR:
+                _log(tr, f"R3 up-line {lv:.2f}: close {close:.2f} "
+                         f"{dist:.2f}xATR past -> stale line, skip")
+            elif close < lv - R3_BREAK_ATR * atr:
                 entry, fill = _r3_entry(df, side, lv, close, atr)
                 stop, src = _r3_stop(df, side, entry, atr)
                 _log(tr, f"R3 up-break: close {close:.2f} under line "
@@ -461,7 +475,10 @@ def r3_trendline(df: pd.DataFrame, trace: dict | None = None) -> list:
                          f"({dist:+.2f}xATR, need <-0.5) -> skip")
         else:
             dist = (close - lv) / atr
-            if close > lv + R3_BREAK_ATR * atr:
+            if dist > R3_MAX_DIST_ATR:
+                _log(tr, f"R3 dn-line {lv:.2f}: close {close:.2f} "
+                         f"{dist:.2f}xATR past -> stale line, skip")
+            elif close > lv + R3_BREAK_ATR * atr:
                 entry, fill = _r3_entry(df, side, lv, close, atr)
                 stop, src = _r3_stop(df, side, entry, atr)
                 _log(tr, f"R3 dn-break: close {close:.2f} over line "
