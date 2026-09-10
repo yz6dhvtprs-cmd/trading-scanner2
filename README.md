@@ -47,8 +47,9 @@ through the premarket gate + intraday ENTERED/STOPPED tracking untouched.
 Backtest it (tool stays open alongside live):
 
 ```
-python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score    # v2 two-step, next-open fills, tag [RPS]
+python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score    # v2 two-step, next-open fills, tag [RPS] (RPS2 = same)
 python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS1 --score   # v1 legacy: bare pair agreement, tag [R3+R10]
+python scanner/backtest_analyzer.py --ticker AAPL --days 20 --algo OLD --score    # mainline algo.json strategies (not reversals)
 RPS_WASH_LO=40 RPS_WASH_HI=60 python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score  # threshold sweep
 ```
 

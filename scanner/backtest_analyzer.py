@@ -300,10 +300,11 @@ def _eval_combo(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
 
 def parse_algos(s: str) -> set:
     """'1,3,R5' -> {'R1','R3','R5'}. Keywords: both (R1+R2, legacy
-    default), rev (all R*), all (OLD + all R*), rps (v2 two-step),
+    default), rev (all R*), all (OLD + all R*), rps/rps2 (two-step with
+    15m-RSI washout + 30m/1H confirm, next-open fills),
     rps1 (legacy v1: bare pair agreement, routine entries),
     'Rn+Rm' agreement combos. Raises ValueError on bad input."""
-    valid = ["OLD", "BOTH", "REV", "ALL", "RPS", "RPS1"] + sorted(
+    valid = ["OLD", "BOTH", "REV", "ALL", "RPS", "RPS1", "RPS2"] + sorted(
         REV_ALGOS, key=_rnum)
     out: set = set()
 
@@ -327,9 +328,9 @@ def parse_algos(s: str) -> set:
             out |= set(REV_ALGOS)
         elif t == "ALL":
             out |= {"OLD"} | set(REV_ALGOS)
-        elif t == "RPS":
+        elif t in ("RPS", "RPS2"):
             if RPS_PAIR is None:
-                raise ValueError("--algo RPS pair not selected yet "
+                raise ValueError(f"--algo {t} pair not selected yet "
                                  "(tournament step pending)")
             out.add(_rps_algo())
         elif t == "RPS1":
@@ -604,7 +605,7 @@ def main() -> int:
     ap.add_argument("--grade", default="",
                     help="minimum grade shown, e.g. B (=B,B+,A,A+)")
     ap.add_argument("--algo", default="both",
-                    help="1..10, OLD, combos Rn+Rm, extras (both/rev/all/rps/rps1)")
+                    help="1..10, OLD, combos Rn+Rm, extras (both/rev/all/rps/rps1/rps2)")
     ap.add_argument("--score", action=argparse.BooleanOptionalAction,
                     default=True, help="forward 1R-vs-SL check per setup")
     a = ap.parse_args()

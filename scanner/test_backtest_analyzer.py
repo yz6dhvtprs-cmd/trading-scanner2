@@ -318,6 +318,7 @@ def t_rps_pair_and_combo():
     assert _bt.RPS_PAIR == ("R3", "R10"), _bt.RPS_PAIR
     assert _bt.parse_algos("rps") == {"RPS"}
     assert _bt.parse_algos("RPS") == {"RPS"}
+    assert _bt.parse_algos("rps2") == {"RPS"}
     assert _bt.parse_algos("rps1") == {"R3+R10"}
     sig_a = {"state": "Possible upcoming Reversal", "price": 100.0,
              "stop": 98.0, "note": "tl-break", "sig_key": ("R3", "x")}
