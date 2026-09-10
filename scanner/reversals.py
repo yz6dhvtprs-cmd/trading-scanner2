@@ -366,15 +366,66 @@ def r2_zigzag_tema(df: pd.DataFrame, trace: dict | None = None) -> list:
 # Possible-Reversal logic.
 # --------------------------------------------------------------------------
 
+R3_FILL_ATR = 0.1  # entry sits this far past the line (conservative
+                  # fill on the crossed path, not the chase-close)
 R3_BREAK_ATR = 0.5  # trend-line break magnitude (the page: false breaks are
                     # common; the magnitude of the break is the key)
+
+
+def _r3_entry(df: pd.DataFrame, side: str, lv: float, close: float,
+              atr: float) -> tuple:
+    """(entry, fill): line-cross fill gated on recent trade. The break bar
+    normally crosses the line, so entry = line -/+ 0.1xATR (earlier and
+    closer to the turn than the chase-close). But late detection (anchors
+    completing after a runaway move) can leave the line outside anything
+    traded in the last 5 bars -> then entry falls back to the close."""
+    raw = lv - R3_FILL_ATR * atr if side == "up" else lv + R3_FILL_ATR * atr
+    rng_lo = float(df["Low"].iloc[-5:].min())
+    rng_hi = float(df["High"].iloc[-5:].max())
+    if rng_lo <= raw <= rng_hi:
+        return raw, "line"
+    return close, "close"
+
+
+def _r3_stop(df: pd.DataFrame, side: str, entry: float,
+             atr: float) -> tuple:
+    """(stop, source): structural stop guaranteed on the valid side of
+    `entry`. Prefers the recent swing pivot; falls back to the 10-bar
+    extreme when the pivot is stale (a crash can leave every recent
+    pivot on the wrong side of entry); then entry -/+ 0.5xATR; and a
+    0.5xATR minimum-risk floor so a stop printing on top of entry can
+    never manufacture a lottery win."""
+    buf = R1_SL_BUF_ATR * atr
+    if side == "up":  # short: stop must sit OVER entry
+        hs = _recent_pivots(df, "H", 30)
+        cand = [hs[-1][2] + buf if hs else float("-inf")]
+        cand.append(float(df["High"].iloc[-10:].max()) + buf)
+        cand.append(entry + 0.5 * atr)
+        stop = next(s for s in cand if s > entry)
+        src = ("pivot" if stop == cand[0] else "hi10"
+               if stop == cand[1] else "atr")
+    else:  # long: stop must sit UNDER entry
+        ls = _recent_pivots(df, "L", 30)
+        cand = [ls[-1][2] - buf if ls else float("inf")]
+        cand.append(float(df["Low"].iloc[-10:].min()) - buf)
+        cand.append(entry - 0.5 * atr)
+        stop = next(s for s in cand if s < entry)
+        src = ("pivot" if stop == cand[0] else "lo10"
+               if stop == cand[1] else "atr")
+    if abs(entry - stop) < 0.5 * atr:  # degenerate pinch: enforce min risk
+        stop = entry + 0.5 * atr if side == "up" else entry - 0.5 * atr
+        src = "minrisk"
+    return stop, src
 
 
 def r3_trendline(df: pd.DataFrame, trace: dict | None = None) -> list:
     """R3 - trend-line break (tool #2). Objective line through the last two
     same-side fractal pivots; reversal = CLOSE beyond the line by
-    >= 0.5xATR. Short breaks the uptrend line (SL = recent swing high);
-    long breaks the downtrend line (SL = recent swing low)."""
+    >= 0.5xATR. ENTRY is the line cross (line -/+ a 0.1xATR fill buffer),
+    not the chase-close: the break bar necessarily traded through the
+    line, so the fill is earlier and closer to the turn. Short breaks
+    the uptrend line (SL = recent swing high); long breaks the downtrend
+    line (SL = recent swing low), both clamped to the valid side."""
     out = []
     if len(df) < 30 or "atr" not in df.columns:
         return out
@@ -397,14 +448,13 @@ def r3_trendline(df: pd.DataFrame, trace: dict | None = None) -> list:
         if side == "up":
             dist = (lv - close) / atr
             if close < lv - R3_BREAK_ATR * atr:
-                hs = _recent_pivots(df, "H", 30)
-                anchor = hs[-1][2] if hs else float(df["High"].iloc[-10:].max())
-                stop = anchor + R1_SL_BUF_ATR * atr
+                entry, fill = _r3_entry(df, side, lv, close, atr)
+                stop, src = _r3_stop(df, side, entry, atr)
                 _log(tr, f"R3 up-break: close {close:.2f} under line "
-                         f"{lv:.2f} by {dist:.2f}xATR -> FIRE")
-                out.append(_sig(state, close, stop, "R3",
+                         f"{lv:.2f} by {dist:.2f}xATR -> FIRE @{entry:.2f}")
+                out.append(_sig(state, entry, stop, "R3",
                                 f"tl-break P1={p1[2]:.2f}@{d1} "
-                                f"P2={p2[2]:.2f}@{d2}",
+                                f"P2={p2[2]:.2f}@{d2} fill={fill} sl={src}",
                                 ("R3", "top", d1, d2)))
             else:
                 _log(tr, f"R3 up-line {lv:.2f}: close {close:.2f} "
@@ -412,14 +462,13 @@ def r3_trendline(df: pd.DataFrame, trace: dict | None = None) -> list:
         else:
             dist = (close - lv) / atr
             if close > lv + R3_BREAK_ATR * atr:
-                ls = _recent_pivots(df, "L", 30)
-                anchor = ls[-1][2] if ls else float(df["Low"].iloc[-10:].min())
-                stop = anchor - R1_SL_BUF_ATR * atr
+                entry, fill = _r3_entry(df, side, lv, close, atr)
+                stop, src = _r3_stop(df, side, entry, atr)
                 _log(tr, f"R3 dn-break: close {close:.2f} over line "
-                         f"{lv:.2f} by {dist:.2f}xATR -> FIRE")
-                out.append(_sig(state, close, stop, "R3",
+                         f"{lv:.2f} by {dist:.2f}xATR -> FIRE @{entry:.2f}")
+                out.append(_sig(state, entry, stop, "R3",
                                 f"tl-break P1={p1[2]:.2f}@{d1} "
-                                f"P2={p2[2]:.2f}@{d2}",
+                                f"P2={p2[2]:.2f}@{d2} fill={fill} sl={src}",
                                 ("R3", "bottom", d1, d2)))
             else:
                 _log(tr, f"R3 dn-line {lv:.2f}: close {close:.2f} "

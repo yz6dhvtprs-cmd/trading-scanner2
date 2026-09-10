@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
 from reversals import (atr_zigzag, fractal_pivots, r1_123,  # noqa: E402
                        r2_zigzag_tema, tema, r3_trendline, r4_channel,
                        r5_maslope, r6_donchian, r7_macddiv, r8_obv,
-                       r9_climax, r10_volosc)
+                       r9_climax, r10_volosc, _r3_stop)
 
 ET = "America/New_York"
 
@@ -231,9 +231,29 @@ def t_r3_break_fires():
     assert len(res) == 1, tr.get("checks")
     r = res[0]
     assert r["state"] == "Possible upcoming Rejection" and r["algo"] == "R3"
-    assert r["stop"] > r["price"] and "tl-break" in r["note"]
+    assert "tl-break" in r["note"] and "fill=line" in r["note"]
     assert r["sig_key"][0] == "R3" and r["sig_key"][1] == "top"
-    assert r["stop"] == round(float(d["High"].iloc[34]) + 0.25, 2), r
+    # entry is the line cross, not the chase-close (115+ crash distance)
+    assert r["price"] > float(d["Close"].iloc[-1]), r
+    assert r["price"] < float(d["High"].iloc[-10:].max()), r
+    # stale pivot (bar-34 high) sits under the line entry: hi10 fallback
+    assert r["stop"] == round(float(d["High"].iloc[39]) + 0.25, 2), r
+    assert "sl=hi10" in r["note"] and r["stop"] > r["price"]
+
+
+def t_r3_stop_prefers_pivot():
+    d = _trend_frame()
+    stop, src = _r3_stop(d, "up", 100.0, 1.0)
+    assert src == "pivot" and \
+        abs(stop - (float(d["High"].iloc[34]) + 0.25)) < 1e-9, (stop, src)
+    stop, src = _r3_stop(d, "dn", 120.0, 1.0)
+    assert src == "pivot" and \
+        abs(stop - (float(d["Low"].iloc[22]) - 0.25)) < 1e-9, (stop, src)
+    # degenerate pinch (stop on top of entry): 0.5xATR min-risk floor
+    stop, src = _r3_stop(d, "up", 110.70, 1.0)
+    assert src == "minrisk" and abs(stop - 111.20) < 1e-9, (stop, src)
+    stop, src = _r3_stop(d, "dn", 105.20, 1.0)
+    assert src == "minrisk" and abs(stop - 104.70) < 1e-9, (stop, src)
 
 
 def t_r3_no_break_no_trade():
@@ -262,6 +282,11 @@ def t_r3_bull_mirror():
     res = r3_trendline(d, trace=tr)
     assert len(res) == 1, tr.get("checks")
     assert res[0]["state"] == "Possible upcoming Reversal"
+    # spike-run: line far below anything traded in 5 bars -> close fill,
+    # pivot stop still on the valid side
+    assert "fill=close" in res[0]["note"] and "sl=pivot" in res[0]["note"], \
+        res[0]
+    assert res[0]["price"] == round(float(d["Close"].iloc[-1]), 2), res[0]
     assert res[0]["stop"] < res[0]["price"]
 
 
@@ -567,7 +592,8 @@ TESTS = [t_fractal_pivots, t_r1_bottom_fires, t_r1_bottom_no_trigger,
          t_r1_top_fires, t_r1_top_failed_failure_is_no_trade,
          t_zigzag_confirms_on_atr_move, t_tema_math_and_stack,
          t_r2_bear_fires_at_breakdown, t_r2_shallow_pullback_skips,
-         t_r3_break_fires, t_r3_no_break_no_trade, t_r3_bull_mirror,
+         t_r3_break_fires, t_r3_stop_prefers_pivot, t_r3_no_break_no_trade,
+         t_r3_bull_mirror,
          t_r4_overshoot_and_confirm, t_r5_flip_fires, t_r5_bull_mirror,
          t_r6_break_fires, t_r6_bear_mirror, t_r7_divergence_fires,
          t_r7_bull_mirror, t_r8_fade_fires, t_r8_bull_mirror,
