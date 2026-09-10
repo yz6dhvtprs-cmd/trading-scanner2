@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
 from reversals import (atr_zigzag, fractal_pivots, r1_123,  # noqa: E402
                        r2_zigzag_tema, tema, r3_trendline, r4_channel,
                        r5_maslope, r6_donchian, r7_macddiv, r8_obv,
-                       r9_climax, r10_volosc, _r3_stop)
+                       r9_climax, r10_volosc, _r3_stop, rps_confirm)
 
 ET = "America/New_York"
 
@@ -601,6 +601,60 @@ def _vo_frame(direction="bear"):
     return d
 
 
+def _intra_frames(direction="long"):
+    """80x15m closes (flat, then washout, then turn) + 20 hourly bars
+    turning the same way. Long: 100 flat, dip to 93, recover to 97."""
+    idx15 = pd.date_range("2026-08-03 09:30", periods=80, freq="15min",
+                          tz=ET)
+    idx60 = pd.date_range("2026-08-03 09:30", periods=20, freq="1h", tz=ET)
+    if direction == "long":
+        cl = [100.0] * 54 + list(np.linspace(100, 93, 10)) + \
+            list(np.linspace(93, 97, 16))
+        hl = list(np.linspace(90, 100, 20))
+    else:
+        cl = [100.0] * 54 + list(np.linspace(100, 107, 10)) + \
+            list(np.linspace(107, 103, 16))
+        hl = list(np.linspace(110, 100, 20))
+    cl = np.array(cl, float)
+    hl = np.array(hl, float)
+    m15 = pd.DataFrame({"Open": cl - 0.05, "High": cl + 0.1,
+                        "Low": cl - 0.1, "Close": cl,
+                        "Volume": 100_000.0}, index=idx15)
+    h1 = pd.DataFrame({"Open": hl - 0.05, "High": np.array(hl) + 0.1,
+                       "Low": np.array(hl) - 0.1, "Close": hl,
+                       "Volume": 400_000.0}, index=idx60)
+    return m15, h1
+
+
+def t_rps_confirm_long_pass():
+    m15, h1 = _intra_frames("long")
+    ok, why = rps_confirm(m15, h1, "up")
+    assert ok and why.startswith("rsi15-wash"), (ok, why)
+
+
+def t_rps_confirm_short_pass():
+    m15, h1 = _intra_frames("short")
+    ok, why = rps_confirm(m15, h1, "dn")
+    assert ok and why.startswith("rsi15-wash"), (ok, why)
+
+
+def t_rps_confirm_no_washout():
+    m15, h1 = _intra_frames("long")
+    m15["Close"] = np.linspace(90, 100, 80)  # grind up, never washed
+    ok, why = rps_confirm(m15, h1, "up")
+    assert (ok, why) == (False, "no-15m-washout")
+    m15s, h1s = _intra_frames("short")
+    m15s["Close"] = np.linspace(110, 100, 80)
+    ok, why = rps_confirm(m15s, h1s, "dn")
+    assert (ok, why) == (False, "no-15m-blowoff")
+
+
+def t_rps_confirm_warmup():
+    m15, h1 = _intra_frames("long")
+    ok, why = rps_confirm(m15.iloc[:20], h1.iloc[:5], "up")
+    assert (ok, why) == (False, "warmup")
+
+
 def t_r10_divergence_fires():
     d = _vo_frame("bear")
     tr: dict = {}
@@ -630,7 +684,9 @@ TESTS = [t_fractal_pivots, t_r1_bottom_fires, t_r1_bottom_no_trigger,
          t_r6_break_fires, t_r6_bear_mirror, t_r7_divergence_fires,
          t_r7_bull_mirror, t_r8_fade_fires, t_r8_bull_mirror,
          t_r9_climax_fires, t_r9_bull_mirror, t_r10_divergence_fires,
-         t_r10_bull_mirror]
+         t_r10_bull_mirror, t_rps_confirm_long_pass,
+         t_rps_confirm_short_pass, t_rps_confirm_no_washout,
+         t_rps_confirm_warmup]
 
 
 def main() -> int:

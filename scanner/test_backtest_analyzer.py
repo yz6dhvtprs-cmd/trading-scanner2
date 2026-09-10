@@ -337,6 +337,26 @@ def t_rps_pair_and_combo():
         _bt.r3_trendline, _bt.r10_volosc = old3, old10
 
 
+def t_eval_rps_two_step():
+    # agreement + washout + turn -> pass; same agreement on a
+    # never-washed frame -> filtered.
+    import test_reversals as _tr
+    sig = {"state": "Possible upcoming Reversal", "price": 100.0,
+           "stop": 98.0, "note": "tl-break", "sig_key": ("R3", "x")}
+    old3, old10 = _bt.r3_trendline, _bt.r10_volosc
+    m15, h1 = _tr._intra_frames("long")
+    flat = m15.copy()
+    flat["Close"] = np.linspace(90, 100, 80)
+    _bt.r3_trendline = lambda *a, **k: [dict(sig)]
+    _bt.r10_volosc = lambda *a, **k: [dict(sig, sig_key=("R10", "y"))]
+    try:
+        got = _bt._eval_rps("T", None, h1, m15, None)
+        assert len(got) == 1 and "rsi15-wash" in got[0]["note"], got
+        assert _bt._eval_rps("T", None, h1, flat, None) == []
+    finally:
+        _bt.r3_trendline, _bt.r10_volosc = old3, old10
+
+
 def t_score_hits():
     base = pd.Timestamp("2026-09-08 09:30", tz=ET)
     idx = [base + pd.Timedelta(minutes=15 * i) for i in range(30)]
@@ -367,7 +387,7 @@ TESTS = [t_slices_causal, t_forming_bar_ohlc, t_change_only_hits,
          t_trace_rejection_fires, t_trace_skip_reasons, t_grades_mirror_main,
          t_grade_filter, t_walk_r1_sigkey_change_only, t_eval_bar_dispatch,
          t_score_hits, t_cooldown_suppresses_same_day_refire,
-         t_window_bars, t_rps_pair_and_combo]
+         t_window_bars, t_rps_pair_and_combo, t_eval_rps_two_step]
 
 
 def main() -> int:

@@ -36,7 +36,8 @@ from combos import add_features  # noqa: E402
 from indicators2 import add_extra  # noqa: E402
 from reversals import (REV_ALGOS, r1_123, r2_zigzag_tema,  # noqa: E402
                        r3_trendline, r4_channel, r5_maslope, r6_donchian,
-                       r7_macddiv, r8_obv, r9_climax, r10_volosc)
+                       r7_macddiv, r8_obv, r9_climax, r10_volosc,
+                       rps_confirm)
 
 # algo -> backtest-namespace global holding its routine (module-global
 # lookup so tests can stub routines by patching _bt.<name>).
@@ -50,6 +51,9 @@ assert set(ROUTER) == set(REV_ALGOS), "router/registry drift"
 # RP=R3 trendline-break (4 wins, 4-1 decided = 80%, tied-most wins);
 # RS=R10 VO-divergence (4 wins itself; co-won 2 of R3's 4 winners: the
 # same-bar AAPL 08-12 long and the next-day NVDA 08-19 short).
+# v2 (this rev): R3+R10 agreement + 15m-RSI washout gate + 30m/1H turn
+# confirm (rps_confirm) + next-15m-open fills. 60d over QQQ/SPY top-10:
+# 10-2 decided (83%) on 12 setups vs v1 17-5 (77%) on 22.
 RPS_PAIR = ("R3", "R10")
 
 _LONG_STATES = {"Long", "Possible upcoming Reversal"}
@@ -192,6 +196,41 @@ def _canon_order(algos: set) -> list:
         sorted(x for x in algos if "+" in x)
 
 
+def _rps_algo() -> str:
+    """Combo tag of the tournament pair (RPS resolves here)."""
+    return f"{RPS_PAIR[0]}+{RPS_PAIR[1]}" if RPS_PAIR else ""
+
+
+def _eval_rps(ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
+              m15: pd.DataFrame, trace: dict | None) -> list:
+    """RPS two-step: daily R3+R10 agreement, then the 15m RSI washout gate
+    with 30m/1H turn confirmation (rps_confirm). Entry is lifted to the
+    next 15m open in walk() so fills always print after the alert."""
+    algo = _rps_algo()
+    sub = {"checks": [], "fired": []} if trace is not None else None
+    paired = _eval_combo(algo, ticker, d, h1, m15, sub)
+    out, gates = [], []
+    for p in paired:
+        side = "up" if p.get("state", "") in _LONG_STATES else "dn"
+        try:
+            ok, why = rps_confirm(m15, h1, side)
+        except Exception:
+            ok, why = False, "rsi-err"
+        gates.append(f"RPS {side}: 2-step {why} -> "
+                     f"{'PASS' if ok else 'skip'}")
+        if not ok:
+            continue
+        q = dict(p)
+        q["note"] = f'{p.get("note", "")} & {why}'
+        out.append(q)
+    if trace is not None:
+        trace.update({"algo": algo,
+                      "checks": (sub.get("checks", []) if sub else []) +
+                      gates,
+                      "fired": [r["state"] for r in out]})
+    return out
+
+
 def eval_bar(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
              m15: pd.DataFrame, trace: dict | None = None) -> list:
     """One routine on one bar's frames. Walk and --debug share this so a
@@ -199,6 +238,8 @@ def eval_bar(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
     kwarg is only passed when set, keeping the walk-time call identical to
     the direct routine call."""
     kw = {} if trace is None else {"trace": trace}
+    if RPS_PAIR is not None and algo == _rps_algo():
+        return _eval_rps(ticker, d, h1, m15, trace)
     if "+" in algo:
         return _eval_combo(algo, ticker, d, h1, m15, trace)
     if algo in ROUTER:
@@ -333,10 +374,24 @@ def walk(ticker: str, d_full: pd.DataFrame, h1_full: pd.DataFrame,
                     continue  # same pattern flickering back: not a new setup
                 cooled[key] = pos
                 grade, why = grade_of(r["state"], r.get("note", ""))
-                hits.append({"id": len(hits) + 1, "ts": ts,
-                             "time": ts + pd.Timedelta(minutes=15),
-                             "algo": r.get("algo", ""),
-                             "grade": grade, "grade_why": why, **r})
+                hit = {"id": len(hits) + 1, "ts": ts,
+                       "time": ts + pd.Timedelta(minutes=15),
+                       "algo": r.get("algo", ""),
+                       "grade": grade, "grade_why": why, **r}
+                if RPS_PAIR is not None and \
+                        r.get("algo", "") == _rps_algo():
+                    # RPS fills the next 15m open: entries always print
+                    # after the alert (zero lookahead, live-fillable).
+                    coming = m15_hist.index[m15_hist.index > ts]
+                    if len(coming):
+                        hit["price"] = round(float(
+                            m15_hist["Open"].loc[coming[0]]), 2)
+                        hit["note"] = f'{hit.get("note", "")} ' \
+                            "fill=next-open"
+                    else:
+                        hit["note"] = f'{hit.get("note", "")} ' \
+                            "fill=signal-EOD"
+                hits.append(hit)
         active = bar_keys
     stats = {"scanned": scanned, "evaluated": evaluated, "skipped": skipped,
              "errors": errors}

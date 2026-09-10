@@ -976,3 +976,70 @@ REV_ALGOS = {
     "R9": r9_climax,
     "R10": r10_volosc,
 }
+
+
+RSI_N = 14            # Wilder RSI length on intraday frames
+RPS_WASH_N = 26       # 15m bars (~1 session) scanned for the washout
+RPS_RSI_WASH_LO = 35.0  # long needs a sub-35 15m-RSI washout in window
+RPS_RSI_WASH_HI = 65.0  # short needs a 65+ 15m-RSI blowoff in window
+
+
+def rsi_wilder(close: pd.Series, n: int = RSI_N) -> pd.Series:
+    """Wilder RSI (ewm formulation). Flat stretches read 50, pure-up 100."""
+    d = close.astype(float).diff()
+    up = d.clip(lower=0.0)
+    dn = -d.clip(upper=0.0)
+    ru = up.ewm(alpha=1.0 / n, adjust=False).mean()
+    rd = dn.ewm(alpha=1.0 / n, adjust=False).mean()
+    rs = ru / rd.replace(0.0, float("nan"))
+    out = 100.0 - 100.0 / (1.0 + rs)
+    out = out.fillna(50.0)
+    out.loc[(rd == 0) & (ru > 0)] = 100.0
+    return out
+
+
+def rps_confirm(m15: pd.DataFrame, h1: pd.DataFrame,
+                side: str) -> tuple:
+    """RPS two-step trigger (measured 15m-RSI shape before reversals:
+    washout matters, signal-bar slope doesn't, first-bar slopes are gap
+    noise). Step 1 (15m): RSI washed out on the reversal side within the
+    last 26 bars (long: min < 35; short: max > 65). Step 2 (validate):
+    30m RSI turning the reversal way vs 3 bars ago, else 1H RSI turning
+    vs 2 bars ago. Returns (ok, detail)."""
+    try:
+        r15 = rsi_wilder(m15["Close"])
+    except Exception:
+        return False, "rsi-err"
+    if len(r15) < RSI_N + RPS_WASH_N:
+        return False, "warmup"
+    tail = r15.iloc[-RPS_WASH_N:]
+    if side == "up":
+        if float(tail.min()) >= RPS_RSI_WASH_LO:
+            return False, "no-15m-washout"
+    else:
+        if float(tail.max()) <= RPS_RSI_WASH_HI:
+            return False, "no-15m-blowoff"
+    try:
+        b30 = m15["Close"].resample("30min").last().dropna()
+        r30 = rsi_wilder(b30)
+    except Exception:
+        r30 = None
+    try:
+        r60 = rsi_wilder(h1["Close"])
+    except Exception:
+        r60 = None
+    if side == "up":
+        if r30 is not None and len(r30) >= RSI_N + 3 and \
+                float(r30.iloc[-1]) > float(r30.iloc[-4]):
+            return True, "rsi15-wash+30m-up"
+        if r60 is not None and len(r60) >= RSI_N + 2 and \
+                float(r60.iloc[-1]) > float(r60.iloc[-3]):
+            return True, "rsi15-wash+1h-up"
+        return False, "no-30m/1h-turn"
+    if r30 is not None and len(r30) >= RSI_N + 3 and \
+            float(r30.iloc[-1]) < float(r30.iloc[-4]):
+        return True, "rsi15-wash+30m-dn"
+    if r60 is not None and len(r60) >= RSI_N + 2 and \
+            float(r60.iloc[-1]) < float(r60.iloc[-3]):
+        return True, "rsi15-wash+1h-dn"
+    return False, "no-30m/1h-turn"
