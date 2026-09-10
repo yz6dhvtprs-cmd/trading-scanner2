@@ -193,11 +193,16 @@ def _canon_order(algos: set) -> list:
     """Deterministic per-bar eval order: OLD, singles ascending, combos."""
     canon = ["OLD"] + sorted(REV_ALGOS, key=_rnum)
     return [x for x in canon if x in algos] + \
-        sorted(x for x in algos if "+" in x)
+        sorted(x for x in algos if "+" in x or x == "RPS")
 
 
 def _rps_algo() -> str:
-    """Combo tag of the tournament pair (RPS resolves here)."""
+    """v2 tag. RPS1 (legacy v1: bare R3+R10 agreement, routine entries)
+    keeps the pair tag so both can run side by side for A/B."""
+    return "RPS"
+
+
+def _rps_pair_tag() -> str:
     return f"{RPS_PAIR[0]}+{RPS_PAIR[1]}" if RPS_PAIR else ""
 
 
@@ -208,7 +213,7 @@ def _eval_rps(ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
     next 15m open in walk() so fills always print after the alert."""
     algo = _rps_algo()
     sub = {"checks": [], "fired": []} if trace is not None else None
-    paired = _eval_combo(algo, ticker, d, h1, m15, sub)
+    paired = _eval_combo(_rps_pair_tag(), ticker, d, h1, m15, sub)
     out, gates = [], []
     for p in paired:
         side = "up" if p.get("state", "") in _LONG_STATES else "dn"
@@ -221,6 +226,7 @@ def _eval_rps(ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
         if not ok:
             continue
         q = dict(p)
+        q["algo"] = algo
         q["note"] = f'{p.get("note", "")} & {why}'
         out.append(q)
     if trace is not None:
@@ -284,9 +290,10 @@ def _eval_combo(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
 
 def parse_algos(s: str) -> set:
     """'1,3,R5' -> {'R1','R3','R5'}. Keywords: both (R1+R2, legacy
-    default), rev (all R*), all (OLD + all R*), rps (tournament pair),
+    default), rev (all R*), all (OLD + all R*), rps (v2 two-step),
+    rps1 (legacy v1: bare pair agreement, routine entries),
     'Rn+Rm' agreement combos. Raises ValueError on bad input."""
-    valid = ["OLD", "BOTH", "REV", "ALL", "RPS"] + sorted(
+    valid = ["OLD", "BOTH", "REV", "ALL", "RPS", "RPS1"] + sorted(
         REV_ALGOS, key=_rnum)
     out: set = set()
 
@@ -314,7 +321,12 @@ def parse_algos(s: str) -> set:
             if RPS_PAIR is None:
                 raise ValueError("--algo RPS pair not selected yet "
                                  "(tournament step pending)")
-            out.add(f"{RPS_PAIR[0]}+{RPS_PAIR[1]}")
+            out.add(_rps_algo())
+        elif t == "RPS1":
+            if RPS_PAIR is None:
+                raise ValueError("--algo RPS1 pair not selected yet "
+                                 "(tournament step pending)")
+            out.add(_rps_pair_tag())
         elif "+" in t:
             parts = [one(p) for p in t.split("+")]
             if len(parts) != 2 or parts[0] == parts[1]:
@@ -554,15 +566,20 @@ def print_trace(ticker: str, hit: dict, tr: dict) -> None:
     print(f'  forming daily O/H/L/C/V={dl} prev_close={tr.get("daily_prev_close")}',
           flush=True)
     print(f'  15m bar O/H/L/C/V={tr.get("m15_last")}', flush=True)
-    for tf in ("D", "1h", "15m"):
-        vi = tr.get("vote_inputs", {}).get(tf, {})
-        print(f'  vote {tf}={tr.get("votes", {}).get(tf)} inputs={vi}',
+    if "votes" not in tr:
+        print("  (standalone R* routine: votes/RSI/ADX/supports N/A - "
+              "daily frame + checks above are its full inputs)", flush=True)
+    else:
+        for tf in ("D", "1h", "15m"):
+            vi = tr.get("vote_inputs", {}).get(tf, {})
+            print(f'  vote {tf}={tr.get("votes", {}).get(tf)} inputs={vi}',
+                  flush=True)
+        print(f'  rsi={tr.get("rsi")} adx={tr.get("adx")} '
+              f'rvol={tr.get("rvol")} hi20={tr.get("hi20")} '
+              f'lo20={tr.get("lo20")} pats={tr.get("pats_last3")}',
               flush=True)
-    print(f'  rsi={tr.get("rsi")} adx={tr.get("adx")} rvol={tr.get("rvol")} '
-          f'hi20={tr.get("hi20")} lo20={tr.get("lo20")} '
-          f'pats={tr.get("pats_last3")}', flush=True)
-    print(f'  supports={tr.get("supports")} resistances={tr.get("resistances")}',
-          flush=True)
+        print(f'  supports={tr.get("supports")} '
+              f'resistances={tr.get("resistances")}', flush=True)
     for c in tr.get("checks", []):
         print(f'  {c}', flush=True)
     print(f'  fired={tr.get("fired")}', flush=True)
@@ -577,7 +594,7 @@ def main() -> int:
     ap.add_argument("--grade", default="",
                     help="minimum grade shown, e.g. B (=B,B+,A,A+)")
     ap.add_argument("--algo", default="both",
-                    help="1..10, OLD, combos Rn+Rm, extras (both/rev/all/rps)")
+                    help="1..10, OLD, combos Rn+Rm, extras (both/rev/all/rps/rps1)")
     ap.add_argument("--score", action=argparse.BooleanOptionalAction,
                     default=True, help="forward 1R-vs-SL check per setup")
     a = ap.parse_args()
@@ -647,6 +664,13 @@ def main() -> int:
             tr: dict = {}
             re_fired = [r["state"] for r in eval_bar(
                 h.get("algo") or "OLD", ticker, *sl, trace=tr)]
+            dd, _, mm = sl  # frames the routine actually read
+            tr["daily_last"] = {
+                k: round(float(dd[k].iloc[-1]), 2)
+                for k in ("Open", "High", "Low", "Close", "Volume")}
+            tr["m15_last"] = {
+                k: round(float(mm[k].iloc[-1]), 2)
+                for k in ("Open", "High", "Low", "Close", "Volume")}
             print_trace(ticker, h, tr)
             if h["state"] not in re_fired:
                 print(f"  WARNING: replay fired {re_fired}, hit was "
