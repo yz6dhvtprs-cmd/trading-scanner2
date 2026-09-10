@@ -223,10 +223,126 @@ def t_grade_filter():
     assert [h["grade"] for h in shown] == ["A+"] and hidden == 5
 
 
+def _r1_sig(state="Possible upcoming Reversal", key=("R1", "bottom")):
+    return {"state": state, "price": 100.0, "target": "-", "stop": 99.0,
+            "note": "123-bottom test", "algo": "R1", "sig_key": key}
+
+
+def t_walk_r1_sigkey_change_only():
+    d, h1, m15 = _synth()
+    k1 = ("R1", "bottom", "d1", "d2", "d3")
+    k2 = ("R1", "bottom", "d1", "d2", "d4-new")
+    seq = [[_r1_sig(key=k1)], [_r1_sig(key=k1)], [_r1_sig(key=k2)]]
+    calls = {"n": 0}
+
+    def stub(_d, trace=None):
+        calls["n"] += 1
+        return seq[min(calls["n"] - 1, 2)]
+
+    old = _bt.r1_123
+    _bt.r1_123 = stub
+    try:
+        o15, od = _bt.MIN_TF, _bt.MIN_DAILY
+        _bt.MIN_TF, _bt.MIN_DAILY = 1, 1
+        try:
+            hits, _ = _bt.walk("T", d, h1, m15, algos={"R1"})
+        finally:
+            _bt.MIN_TF, _bt.MIN_DAILY = o15, od
+    finally:
+        _bt.r1_123 = old
+    assert [h["id"] for h in hits] == [1, 2], hits  # repeat suppressed
+    assert all(h["algo"] == "R1" and h["grade"] == "B" for h in hits)
+
+
+def t_cooldown_suppresses_same_day_refire():
+    # same pattern key flickering back within 26 bars is one setup, not two;
+    # returning after the cooldown is a new setup.
+    d, h1, m15 = _synth()
+    k1 = ("R1", "bottom", "d1", "d2", "d3")
+    seq = [[_r1_sig(key=k1)], [_r1_sig(key=k1)]] + [[ ]] * 30 + \
+        [[_r1_sig(key=k1)]] * 70
+    calls = {"n": 0}
+
+    def stub(_d, trace=None):
+        calls["n"] += 1
+        return seq[min(calls["n"] - 1, len(seq) - 1)]
+
+    old = _bt.r1_123
+    _bt.r1_123 = stub
+    try:
+        o15, od = _bt.MIN_TF, _bt.MIN_DAILY
+        _bt.MIN_TF, _bt.MIN_DAILY = 1, 1
+        try:
+            hits, _ = _bt.walk("T", d, h1, m15, algos={"R1"})
+        finally:
+            _bt.MIN_TF, _bt.MIN_DAILY = o15, od
+    finally:
+        _bt.r1_123 = old
+    assert [h["id"] for h in hits] == [1, 2], hits
+    assert hits[0]["ts"] == m15.index[3]
+    assert hits[1]["ts"] == m15.index[35], hits[1]["ts"]
+
+
+def t_window_bars():
+    _, _, m15 = _synth()  # 4 dates x 26 bars
+    w = _bt.window_bars(m15, 2)
+    assert len(w) == 52, len(w)
+    assert w.index[0].date() == sorted(set(m15.index.date))[-2]
+    assert w.index[-1] == m15.index[-1]
+
+
+def t_eval_bar_dispatch():
+    seen = []
+
+    def mk(name):
+        def stub(*a, **k):
+            seen.append(name)
+            return []
+        return stub
+
+    old = (_bt.analyze, _bt.r1_123, _bt.r2_zigzag_tema)
+    _bt.analyze, _bt.r1_123, _bt.r2_zigzag_tema = \
+        mk("OLD"), mk("R1"), mk("R2")
+    try:
+        _bt.eval_bar("OLD", "T", None, None, None)
+        _bt.eval_bar("R1", "T", None, None, None)
+        _bt.eval_bar("R2", "T", None, None, None)
+    finally:
+        (_bt.analyze, _bt.r1_123, _bt.r2_zigzag_tema) = old
+    assert seen == ["OLD", "R1", "R2"], seen
+
+
+def t_score_hits():
+    base = pd.Timestamp("2026-09-08 09:30", tz=ET)
+    idx = [base + pd.Timedelta(minutes=15 * i) for i in range(30)]
+    H = [100.0] * 6 + [100.5, 101.0, 102.5] + [100.5] * 21
+    L = [100.0] * 6 + [99.5, 99.0, 99.5] + [99.5] * 21
+    m15 = pd.DataFrame({"High": H, "Low": L,
+                        "Open": 100.0, "Close": 100.0}, index=idx)
+    hits = [
+        {"id": 1, "ts": idx[5], "price": 100.0, "stop": 98.0,
+         "state": "Possible upcoming Reversal"},   # +1R at bar 3
+        {"id": 2, "ts": idx[5], "price": 100.0, "stop": 102.0,
+         "state": "Possible upcoming Rejection"},  # SL at bar 3
+        {"id": 3, "ts": idx[5], "price": 100.0, "stop": 90.0,
+         "state": "Long"},                          # never touches
+        {"id": 4, "ts": idx[28], "price": 100.0, "stop": 98.0,
+         "state": "Long"},                          # window runs out
+    ]
+    got = {s["id"]: s for s in _bt.score_hits(hits, m15, fwd=10)}
+    assert got[1]["outcome"] == "win" and got[1]["bars"] == 3, got[1]
+    assert got[1]["mfe"] == 1.25, got[1]
+    assert got[2]["outcome"] == "loss" and got[2]["bars"] == 3, got[2]
+    assert got[3]["outcome"] == "open" and got[3]["mfe"] == 0.25, got[3]
+    assert got[4]["outcome"] == "recent", got[4]
+
+
 TESTS = [t_slices_causal, t_forming_bar_ohlc, t_change_only_hits,
          t_reappearing_state_rehits, t_fmt_shape, t_parse_ids,
          t_trace_rejection_fires, t_trace_skip_reasons, t_grades_mirror_main,
-         t_grade_filter]
+         t_grade_filter, t_walk_r1_sigkey_change_only, t_eval_bar_dispatch,
+         t_score_hits, t_cooldown_suppresses_same_day_refire,
+         t_window_bars]
 
 
 def main() -> int:

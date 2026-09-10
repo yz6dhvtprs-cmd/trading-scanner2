@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
 from analyze import analyze, flat  # noqa: E402
 from combos import add_features  # noqa: E402
 from indicators2 import add_extra  # noqa: E402
+from reversals import r1_123, r2_zigzag_tema  # noqa: E402
 
 PT = "America/Los_Angeles"
 MIN_DAILY = 121   # swing_levels reads a 120-bar lookback
@@ -78,16 +79,33 @@ def grade_of(state: str, note: str) -> tuple:
     return "B", "no backtested variant"
 
 
+FWD_ROOM_DAYS = 40  # extra 15m history before the walk window. The walk
+                  # then starts with full indicator warmup (no skipped
+                  # bars); forward scoring uses bars after each signal
+                  # (position-dependent; tail signals report 'recent').
+
+
+def window_bars(m15_full: pd.DataFrame, days: int) -> pd.DataFrame:
+    """15m bars on the last `days` distinct dates (the walk window)."""
+    dates = sorted(set(m15_full.index.date))[-days:]
+    keep = set(dates)
+    return m15_full[[d in keep for d in m15_full.index.date]]
+
+
 def fetch(ticker: str, days: int):
-    """(daily_full, h1_full, m15_full), oldest-first, tz-aware."""
+    """(daily_full, h1_full, m15_full), oldest-first, tz-aware. The 15m
+    fetch overshoots the walk window by FWD_ROOM_DAYS (15m caps at 60d);
+    main() walks only the last `days` of it via window_bars()."""
     import yfinance as yf
     d = flat(yf.download(ticker, period="1y", interval="1d",
                          auto_adjust=True, progress=False, threads=False))
     h1 = flat(yf.download(ticker, period=f"{days + H1_WARMUP_DAYS}d",
                           interval="1h", auto_adjust=True, progress=False,
                           threads=False))
-    m15 = flat(yf.download(ticker, period=f"{days}d", interval="15m",
-                           auto_adjust=True, progress=False, threads=False))
+    m15 = flat(yf.download(ticker,
+                           period=f"{min(60, days + FWD_ROOM_DAYS)}d",
+                           interval="15m", auto_adjust=True, progress=False,
+                           threads=False))
     out = []
     for f in (d, h1, m15):
         f = f.dropna(subset=["Close"]).sort_index()
@@ -133,15 +151,42 @@ def slices_for(d_full: pd.DataFrame, h1_full: pd.DataFrame,
     return d, h1, m15
 
 
+ALGO_ORDER = ["OLD", "R1", "R2"]  # fixed eval order per bar
+COOLDOWN_BARS = 26  # same pattern key can't re-fire within ~1 session:
+                    # intraday trigger/pivot flicker around a level is one
+                    # setup (one #id), a re-break days later is a new one
+
+
+def eval_bar(algo: str, ticker: str, d: pd.DataFrame, h1: pd.DataFrame,
+             m15: pd.DataFrame, trace: dict | None = None) -> list:
+    """One routine on one bar's frames. Walk and --debug share this so a
+    debug replay can never diverge from what the walk evaluated. The trace
+    kwarg is only passed when set, keeping the walk-time call identical to
+    the direct routine call."""
+    kw = {} if trace is None else {"trace": trace}
+    if algo == "R1":
+        return r1_123(d, **kw)
+    if algo == "R2":
+        return r2_zigzag_tema(d, **kw)
+    return analyze(ticker, d, h1, m15, **kw)
+
+
 def walk(ticker: str, d_full: pd.DataFrame, h1_full: pd.DataFrame,
-         m15_full: pd.DataFrame) -> tuple:
-    """Run the armed gates bar by bar. Returns (hits, stats); each hit is a
-    newly appeared state (change-only, like live alerts)."""
-    hits, active = [], set()
+         m15_walk: pd.DataFrame, algos=None, m15_hist=None) -> tuple:
+    """Run the selected routines bar by bar over m15_walk. Returns (hits,
+    stats); each hit is a newly appeared signal (change-only: same pattern
+    key on the next bar does not re-alert, a new pattern does). Indicator
+    history comes from m15_hist (defaults to the walk frame); pass the full
+    fetch there and the walk starts fully warmed (zero skipped bars)."""
+    if algos is None:
+        algos = {"OLD", "R1", "R2"}
+    if m15_hist is None:
+        m15_hist = m15_walk
+    hits, active, cooled = [], set(), {}
     scanned = evaluated = skipped = errors = 0
-    for ts in m15_full.index:
+    for pos, ts in enumerate(m15_walk.index):
         scanned += 1
-        sl = slices_for(d_full, h1_full, m15_full, ts)
+        sl = slices_for(d_full, h1_full, m15_hist, ts)
         if sl is None:
             skipped += 1
             continue
@@ -150,18 +195,31 @@ def walk(ticker: str, d_full: pd.DataFrame, h1_full: pd.DataFrame,
             skipped += 1
             continue
         evaluated += 1
-        try:
-            results = analyze(ticker, d, h1, m15)
-        except Exception:
-            errors += 1
-            continue
-        for r in results:
-            if r["state"] not in active:
+        bar_keys = set()
+        for algo in [x for x in ALGO_ORDER if x in algos]:
+            try:
+                results = eval_bar(algo, ticker, d, h1, m15)
+            except Exception:
+                errors += 1
+                continue
+            for r in results:
+                key = r.get("sig_key", (algo, r["state"]))
+                try:
+                    hash(key)
+                except Exception:
+                    key = (algo, r["state"])
+                bar_keys.add(key)
+                if key in active:
+                    continue
+                if pos - cooled.get(key, -10 ** 9) < COOLDOWN_BARS:
+                    continue  # same pattern flickering back: not a new setup
+                cooled[key] = pos
                 grade, why = grade_of(r["state"], r.get("note", ""))
                 hits.append({"id": len(hits) + 1, "ts": ts,
                              "time": ts + pd.Timedelta(minutes=15),
+                             "algo": r.get("algo", ""),
                              "grade": grade, "grade_why": why, **r})
-        active = {r["state"] for r in results}
+        active = bar_keys
     stats = {"scanned": scanned, "evaluated": evaluated, "skipped": skipped,
              "errors": errors}
     return hits, stats
@@ -174,9 +232,93 @@ _SIDE = {"Long": "Buy", "Possible upcoming Rejection": "Short",
 def fmt(ticker: str, hit: dict) -> str:
     ts = hit["time"].tz_convert(PT).strftime("%Y-%m-%d %H:%MPT")
     side = _SIDE.get(hit["state"], "?")
-    return (f'#{hit["id"]} {ts} "[{hit.get("grade", "?")}] {ticker} - '
+    atag = f'[{hit["algo"]}]' if hit.get("algo") else ""
+    return (f'#{hit["id"]} {ts} "[{hit.get("grade", "?")}]{atag} {ticker} - '
             f'{hit["state"]} - {side} @ {hit["price"]} - '
             f'SL {hit["stop"]} - target {hit["target"]}. ({hit["note"]})"')
+
+
+FWD_BARS = 260  # ~10 sessions of 15m bars: daily-swing risks (2-6%)
+                  # need 1-3 weeks to resolve; 5 sessions scored them all
+                  # 'open' by construction
+
+
+def score_hits(hits: list, m15_full: pd.DataFrame,
+               fwd: int = FWD_BARS) -> list:
+    """Forward first-touch check per hit (comparability proxy, NOT the live
+    exit, which trails). Long wins if +1R tags before the SL, short
+    mirrors; same-bar double touch counts as a loss (SL assumed first);
+    'open' if neither touches in fwd bars; 'recent' when the window runs
+    out before fwd bars elapse. Each result: {id, outcome, bars, mfe_R}."""
+    out = []
+    for h in hits:
+        entry, sl = float(h["price"]), float(h["stop"])
+        risk = abs(entry - sl)
+        long = h["state"] in ("Long", "Possible upcoming Reversal")
+        fwd_bars = m15_full[m15_full.index > h["ts"]].head(fwd)
+        if risk <= 0:
+            out.append({"id": h["id"], "outcome": "norisk", "bars": 0,
+                        "mfe": None})
+            continue
+        if len(fwd_bars) < fwd:
+            out.append({"id": h["id"], "outcome": "recent",
+                        "bars": len(fwd_bars), "mfe": None})
+            continue
+        res, nb, mfe = "open", len(fwd_bars), 0.0
+        for j, (_, b) in enumerate(fwd_bars.iterrows(), 1):
+            hi, lo = float(b["High"]), float(b["Low"])
+            if long:
+                mfe = max(mfe, (hi - entry) / risk)
+                if lo <= sl:
+                    res, nb = "loss", j
+                    break
+                if hi >= entry + risk:
+                    res, nb = "win", j
+                    break
+            else:
+                mfe = max(mfe, (entry - lo) / risk)
+                if hi >= sl:
+                    res, nb = "loss", j
+                    break
+                if lo <= entry - risk:
+                    res, nb = "win", j
+                    break
+        out.append({"id": h["id"], "outcome": res, "bars": nb,
+                    "mfe": round(mfe, 2)})
+    return out
+
+
+def print_scores(hits: list, scored: list) -> None:
+    print(f"FORWARD CHECK ({FWD_BARS} bars ~10 sessions; +1R first-touch "
+          f"vs SL; proxy, not the live exit):", flush=True)
+    by_id = {h["id"]: h for h in hits}
+    for s in scored:
+        h = by_id[s["id"]]
+        atag = f'[{h["algo"]}]' if h.get("algo") else "[OLD]"
+        mfe = "-" if s["mfe"] is None else f'{s["mfe"]:+.2f}R'
+        print(f'  #{s["id"]}{atag} {s["outcome"]} '
+              f'({s["bars"]} bars, mfe {mfe})', flush=True)
+    agg: dict = {}
+    for s in scored:
+        if s["outcome"] in ("recent", "norisk"):
+            continue
+        a = by_id[s["id"]].get("algo") or "OLD"
+        d = agg.setdefault(a, {"n": 0, "win": 0, "loss": 0, "mfe": []})
+        d["n"] += 1
+        if s["outcome"] == "win":
+            d["win"] += 1
+        elif s["outcome"] == "loss":
+            d["loss"] += 1
+        if s["mfe"] is not None:
+            d["mfe"].append(s["mfe"])
+    for a in sorted(agg):
+        d = agg[a]
+        decided = d["win"] + d["loss"]
+        wr = f"{100.0 * d['win'] / decided:.0f}%" if decided else "-"
+        avg = sum(d["mfe"]) / len(d["mfe"]) if d["mfe"] else 0.0
+        print(f"  [{a}] scored={d['n']} win={d['win']} loss={d['loss']} "
+              f"open={d['n'] - decided} win%={wr} avg_mfe={avg:+.2f}R",
+              flush=True)
 
 
 GRADE_ORDER = ["C", "B", "B+", "A", "A+"]
@@ -261,7 +403,18 @@ def main() -> int:
                     help="setup ids to trace, e.g. '1' or '1,3-4'")
     ap.add_argument("--grade", default="",
                     help="minimum grade shown, e.g. B (=B,B+,A,A+)")
+    ap.add_argument("--algo", default="both",
+                    help="1, 2, both (default: the two new reversal "
+                    "routines), all (also the armed gates)")
+    ap.add_argument("--score", action=argparse.BooleanOptionalAction,
+                    default=True, help="forward 1R-vs-SL check per setup")
     a = ap.parse_args()
+    algo_sets = {"1": {"R1"}, "2": {"R2"}, "both": {"R1", "R2"},
+                 "all": {"OLD", "R1", "R2"}}
+    sel = (a.algo or "both").strip().lower()
+    if sel not in algo_sets:
+        print(f"bad --algo {a.algo!r} (want 1, 2, both, all)", flush=True)
+        return 1
     try:
         debug_ids = parse_ids(a.debug) if a.debug.strip() else []
         min_grade = parse_grade(a.grade) if a.grade.strip() else ""
@@ -291,13 +444,15 @@ def main() -> int:
         print(f"no data for {ticker} (bad ticker or empty window)",
               flush=True)
         return 1
-    span0 = m15_full.index[0].tz_convert(PT).strftime("%Y-%m-%d")
-    span1 = m15_full.index[-1].tz_convert(PT).strftime("%Y-%m-%d")
+    m15_walk = window_bars(m15_full, days)
+    span0 = m15_walk.index[0].tz_convert(PT).strftime("%Y-%m-%d")
+    span1 = m15_walk.index[-1].tz_convert(PT).strftime("%Y-%m-%d")
     print(f"BACKTEST {ticker} | 15m window {span0}..{span1} "
-          f"({len(m15_full)} bars) | daily tail-200 | "
-          f"1h {days}+{H1_WARMUP_DAYS}d warmup | change-only hits",
-          flush=True)
-    hits, stats = walk(ticker, d_full, h1_full, m15_full)
+          f"({len(m15_walk)} bars) | daily tail-200 | "
+          f"1h {days}+{H1_WARMUP_DAYS}d warmup | algos {sel} | "
+          f"change-only hits", flush=True)
+    hits, stats = walk(ticker, d_full, h1_full, m15_walk,
+                       algos=algo_sets[sel], m15_hist=m15_full)
     hits, hidden = filter_hits(hits, min_grade)
     filt = f" | grade filter {min_grade}+ ({hidden} below-grade hidden)" \
         if min_grade else ""
@@ -306,6 +461,8 @@ def main() -> int:
     print(f"done: {len(hits)} trade setups | {stats['evaluated']} bars "
           f"evaluated, {stats['skipped']} warmup-skipped, "
           f"{stats['errors']} errors{filt}", flush=True)
+    if a.score and hits:
+        print_scores(hits, score_hits(hits, m15_full))
     if debug_ids:
         by_id = {h["id"]: h for h in hits}
         unknown = [i for i in debug_ids if i not in by_id]
@@ -320,7 +477,8 @@ def main() -> int:
                 print(f"--debug #{i}: bar no longer sliceable", flush=True)
                 return 1
             tr: dict = {}
-            re_fired = [r["state"] for r in analyze(ticker, *sl, trace=tr)]
+            re_fired = [r["state"] for r in eval_bar(
+                h.get("algo") or "OLD", ticker, *sl, trace=tr)]
             print_trace(ticker, h, tr)
             if h["state"] not in re_fired:
                 print(f"  WARNING: replay fired {re_fired}, hit was "
