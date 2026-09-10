@@ -980,8 +980,27 @@ REV_ALGOS = {
 
 RSI_N = 14            # Wilder RSI length on intraday frames
 RPS_WASH_N = 26       # 15m bars (~1 session) scanned for the washout
-RPS_RSI_WASH_LO = 35.0  # long needs a sub-35 15m-RSI washout in window
-RPS_RSI_WASH_HI = 65.0  # short needs a 65+ 15m-RSI blowoff in window
+RPS_RSI_WASH_LO = 30.0  # long needs a sub-30 15m-RSI washout in window
+RPS_RSI_WASH_HI = 70.0  # short needs a 70+ 15m-RSI blowoff in window
+# (sweep 60d x13 tickers, per-decided expectancy: 30/70 +0.50R >
+# 35/65 +0.47R > 40/60 +0.26R; env RPS_WASH_LO/HI overrides for tests)
+
+
+def _wash_levels() -> tuple:
+    """(lo, hi) washout thresholds; RPS_WASH_LO/HI env overrides exist
+    for threshold sweeps (invalid values fall back to the defaults)."""
+    import os
+    try:
+        lo = float(os.environ.get("RPS_WASH_LO", RPS_RSI_WASH_LO))
+    except (TypeError, ValueError):
+        lo = RPS_RSI_WASH_LO
+    try:
+        hi = float(os.environ.get("RPS_WASH_HI", RPS_RSI_WASH_HI))
+    except (TypeError, ValueError):
+        hi = RPS_RSI_WASH_HI
+    if not (0.0 < lo < hi < 100.0):
+        return RPS_RSI_WASH_LO, RPS_RSI_WASH_HI
+    return lo, hi
 
 
 def rsi_wilder(close: pd.Series, n: int = RSI_N) -> pd.Series:
@@ -1012,12 +1031,13 @@ def rps_confirm(m15: pd.DataFrame, h1: pd.DataFrame,
         return False, "rsi-err"
     if len(r15) < RSI_N + RPS_WASH_N:
         return False, "warmup"
+    wash_lo, wash_hi = _wash_levels()
     tail = r15.iloc[-RPS_WASH_N:]
     if side == "up":
-        if float(tail.min()) >= RPS_RSI_WASH_LO:
+        if float(tail.min()) >= wash_lo:
             return False, "no-15m-washout"
     else:
-        if float(tail.max()) <= RPS_RSI_WASH_HI:
+        if float(tail.max()) <= wash_hi:
             return False, "no-15m-blowoff"
     try:
         b30 = m15["Close"].resample("30min").last().dropna()

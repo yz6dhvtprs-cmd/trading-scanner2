@@ -52,8 +52,9 @@ assert set(ROUTER) == set(REV_ALGOS), "router/registry drift"
 # RS=R10 VO-divergence (4 wins itself; co-won 2 of R3's 4 winners: the
 # same-bar AAPL 08-12 long and the next-day NVDA 08-19 short).
 # v2 (this rev): R3+R10 agreement + 15m-RSI washout gate + 30m/1H turn
-# confirm (rps_confirm) + next-15m-open fills. 60d over QQQ/SPY top-10:
-# 10-2 decided (83%) on 12 setups vs v1 17-5 (77%) on 22.
+# confirm (rps_confirm) + next-15m-open fills. 60d sweep over 13 ETF
+# tickers: washout 30/70 -> 9-3 decided (75%, +0.50R); 35/65 -> 11-4
+# (73%, +0.47R); 40/60 -> 12-7 (63%, +0.26R). Default 30/70.
 RPS_PAIR = ("R3", "R10")
 
 _LONG_STATES = {"Long", "Possible upcoming Reversal"}
