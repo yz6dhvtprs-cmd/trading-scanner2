@@ -34,7 +34,8 @@ def main() -> int:
         frames = pickle.load(f)
 
     variants = [(v["strategy"], 1 if v["side"] == "long" else -1,
-                 v["filters"]["adx_min"], v["name"], v["grade"])
+                 v["filters"]["adx_min"], v["filters"].get("rvol_min", 2.0),
+                 v["name"], v["grade"])
                 for v in algo["variants"]]
     print(f"algo {algo['algo']} | {len(frames)} tickers | "
           f"last bar {max(f.index[-1].date().isoformat() for f in frames.values())}")
@@ -44,8 +45,8 @@ def main() -> int:
         c = float(f["Close"].iloc[i])
         a = float(f["atr"].iloc[i])
         adx = float(f["adx"].iloc[i])
-        for s, d, ax, name, grade in variants:
-            m = signal_mask(f, s, d, ax)
+        for s, d, ax, rv, name, grade in variants:
+            m = signal_mask(f, s, d, ax, rv)
             if m[i]:
                 entry = c  # reference; real fill = next open per gate
                 risk = risk_of(f, s, d, i)

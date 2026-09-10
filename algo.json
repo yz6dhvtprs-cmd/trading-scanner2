@@ -19,4 +19,5 @@
  "paused": ["all shorts (bull-regime starvation; grade C until bear-regime evidence)",
             "retest variants (edge ~0; revisit with partials)"],
  "selection_note": "ADX 20-22 + trail3.0 consistent across thresholds; ADX>=25 thins out and test degrades; ADX<20 fails TEST confirmation (overfit without the gate). Win rate ~30%: runners pay, not frequency.",
+ "live_note_2026-09-09": "RVOL 1.5 relaxation REJECTED by TEST lock (full S&P pool, breakout-long ADX20 trail3: rvol>=2.0 train +0.73/test +0.59 vs rvol>=1.5 train +0.54/test -0.15, n=137). Live rvol_min stays 2.0. Analyzer MTF fixed same day: rejection/reversal now use D+1h trend context with 15m-only trigger, multistate coexistence.",
  "runs": ["backtest/combos_r1.csv", "backtest/combos_r2.csv"]}

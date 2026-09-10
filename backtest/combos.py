@@ -83,7 +83,10 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
 # ---------- vectorized signal masks ----------
 def signal_mask(df: pd.DataFrame, strategy: str, side: int,
-                adx_min: float) -> np.ndarray:
+                adx_min: float, rvol_min: float = 2.0) -> np.ndarray:
+    """rvol_min default 2.0 preserves all published backtest results; the
+    live scanner passes the algo.json value (2.0 — a 1.5 relaxation was
+    tested 2026-09-09 and failed TEST: +0.54 train / -0.15 test)."""
     bull = df["bull"].to_numpy()
     adx_ok = np.ones(len(df), dtype=bool) if adx_min <= 0 else \
         (df["adx"].to_numpy() >= adx_min)
@@ -103,10 +106,10 @@ def signal_mask(df: pd.DataFrame, strategy: str, side: int,
     elif strategy == "breakout":
         rv = df["rvol"].to_numpy()
         if side == 1:
-            m = (c > df["hi20"].to_numpy()) & (rv >= 2.0) & (r >= 50) & \
+            m = (c > df["hi20"].to_numpy()) & (rv >= rvol_min) & (r >= 50) & \
                 (r <= 67) & bull
         else:
-            m = (c < df["lo20"].to_numpy()) & (rv >= 2.0) & (r >= 33) & \
+            m = (c < df["lo20"].to_numpy()) & (rv >= rvol_min) & (r >= 33) & \
                 (r <= 50) & (~bull)
     else:  # retest
         if side == 1:

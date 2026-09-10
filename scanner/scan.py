@@ -106,7 +106,8 @@ def scan_nightly(frames: dict, algo: dict) -> list:
         for v in algo["variants"]:
             d = 1 if v["side"] == "long" else -1
             if not signal_mask(f, v["strategy"], d,
-                               v["filters"]["adx_min"])[i]:
+                               v["filters"]["adx_min"],
+                               v["filters"].get("rvol_min", 2.0))[i]:
                 continue
             entry = float(f["Close"].iloc[i])
             risk = risk_of(f, v["strategy"], d, i)

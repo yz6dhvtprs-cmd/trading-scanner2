@@ -81,3 +81,9 @@ Never overwrite state on fetch failure (guard in screen.py).
   default with delivery-verify + iMessage fallback. Subscriber admin via
   `scanner/sub.py` (list/add/remove/pause/resume); never hand-edit config.json.
 - **Grades for subscribers**: `GRADES.md` — A/A+/B+/B/C in plain language.
+- **Analyzer silence 2026-09-09**: the MTF gate shipped that morning demanded
+  D+1h agree with the *reversal* direction — impossible at fresh extremes, so
+  rejection/reversal never fired. Fixed: D+1h trend context + 15m-only
+  trigger, Long coexists with qualifiers, per-state change tracking
+  (`scanner/test_analyze.py` 6/6). RVOL 1.5 relaxation tested full-pool and
+  REJECTED by TEST lock (+0.54 train / −0.15 test); live stays 2.0.

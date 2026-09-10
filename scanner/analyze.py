@@ -2,10 +2,15 @@
 
 Usage: python scanner/analyze.py --channels dry
 Reads scanner/agent_watch.json (<=25). Pulls daily + 1h + 15m per ticker.
-States: LONG / SHORT / REVERSAL? (possible upcoming reversal) /
-        REJECT? (possible upcoming rejection at level).
-Combined message covers only tickers whose state CHANGED since last run
-(scanner/agent_state.json). Format matches the ops template exactly.
+States (a ticker holds all that qualify — Long coexists with reversal /
+rejection): LONG / REVERSAL? (possible upcoming reversal) /
+REJECT? (possible upcoming rejection at level). No SHORT leg: shorts are
+paused per algo.json, so counter-trend reads stay "possible" qualifiers.
+Mean-reversion gates: trend context on daily+1h, trigger ONLY on the 15m
+flip (rejection = D+1h UP with 15m DN at resistance; reversal mirrors).
+Combined message covers only states that are NEW or CHANGED since last run
+(scanner/agent_state.json maps ticker -> {state: note}). Format matches
+the ops template exactly.
 """
 from __future__ import annotations
 
@@ -27,6 +32,27 @@ from notify import alert, load_config  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WATCH = os.path.join(ROOT, "scanner", "agent_watch.json")
 STATE = os.path.join(ROOT, "scanner", "agent_state.json")
+# Live breakout RVOL (algo.json). Stays 2.0: a 1.5 relaxation was tested
+# 2026-09-09 full-pool and failed TEST (+0.54 train / -0.15 test, n=137).
+RVOL_MIN = 2.0
+
+
+def _load_state() -> dict:
+    """ticker -> {state: note}. Migrates the pre-multistate format
+    (ticker -> {"state": s, "note": n}); a "-" state migrates to {} so a
+    returning state re-alerts."""
+    if not os.path.exists(STATE):
+        return {}
+    raw = json.load(open(STATE))
+    out = {}
+    for t, v in raw.items():
+        if isinstance(v, dict) and "state" in v and "note" in v:
+            out[t] = {} if v["state"] == "-" else {v["state"]: v["note"]}
+        elif isinstance(v, dict):
+            out[t] = dict(v)
+        else:
+            out[t] = {}
+    return out
 
 
 def flat(h):
@@ -120,10 +146,13 @@ def tf_up(f: pd.DataFrame) -> str:
 
 
 def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
-            m15: pd.DataFrame) -> dict:
-    """Every returned state carries direction + entry + S/R target + stop.
+            m15: pd.DataFrame) -> list:
+    """All qualified states for one ticker (Long coexists with reversal /
+    rejection — a new qualifier alerts even when Long already fired).
+    Every returned state carries direction + entry + S/R target + stop.
     Base-signal stops stay risk-based (validated); everything else reads off
     support/resistance + Fib + EMA/MA levels on daily and 1h."""
+    out = []
     i = len(d) - 1
     c = float(d["Close"].iloc[i])
     hi20 = float(d["hi20"].iloc[i])
@@ -145,54 +174,68 @@ def analyze(t: str, d: pd.DataFrame, h1: pd.DataFrame,
             ext = fib_targets(hi20, lo20, -1)
         return tgt, ext
 
-    # 1. base signals first (never replaced; stops stay validated risk-based)
-    for sname, dd, label in (("breakout", 1, "Long"), ("pullback", 1, "Long")):
-        if signal_mask(d, sname, dd, 20.0)[i]:
-            risk = risk_of(d, sname, dd, i)
+    # 1. base signals first (at most one Long; breakout has priority).
+    # Stops stay validated risk-based; RVOL uses the live relaxation.
+    for sname in ("breakout", "pullback"):
+        if signal_mask(d, sname, 1, 20.0, RVOL_MIN)[i]:
+            risk = risk_of(d, sname, 1, i)
             stop = c - risk
             tgt, ext = objective(1)
             tgt_txt = f"{tgt:.2f}" if tgt else f"+3R {(c + 3 * risk):.2f}"
-            return {"state": label, "price": round(c, 2),
-                    "target": f"{tgt_txt} (trail; fib-ext {ext['ext162']:.2f})",
-                    "stop": round(stop, 2),
-                    "note": f"{sname} trigger " + _votes(votes)}
-    # MTF gate for new states: daily + 1h must agree with the call direction.
-    up_ok = votes["D"] == "UP" and votes["1h"] == "UP"
-    dn_ok = votes["D"] == "DN" and votes["1h"] == "DN"
-    # 2. rejection (short bias): at 20d-high / Fib / resistance + weak candle
+            out.append({"state": "Long", "price": round(c, 2),
+                        "target": f"{tgt_txt} (trail; fib-ext "
+                                  f"{ext['ext162']:.2f})",
+                        "stop": round(stop, 2),
+                        "note": f"{sname} trigger " + _votes(votes)})
+            break
+    # MTF: trend context on daily+1h, trigger ONLY on the 15m flip.
+    # Rejection = already up (D+1h UP) but 15m rolling over at resistance;
+    # reversal mirrors (D+1h DN, 15m turning up at support).
+    up_ctx = votes["D"] == "UP" and votes["1h"] == "UP"
+    dn_ctx = votes["D"] == "DN" and votes["1h"] == "DN"
+    m15_dn = votes["15m"] == "DN"
+    m15_up = votes["15m"] == "UP"
+    # 2. rejection (short bias): 20d-high / Fib / resistance + weak candle
     levels = [("20d-high", hi20)] + [(f"fib{r}", v) for r, v in fib.items()]
+    if res:
+        levels.append(("resist", min(res)))
     bear_pat = bool(pats & set(BEAR_PAT))
     for name, lvl in levels:
-        if near(c, lvl, ZONE_TOL) and bear_pat and rsi > 55 and dn_ok:
+        if near(c, lvl, ZONE_TOL) and bear_pat and rsi > 55 and up_ctx \
+                and m15_dn:
             tgt, ext = objective(-1)
             tgt_txt = f"{tgt:.2f}" if tgt else f"{ext['ext162']:.2f}"
             rr = (c - float(tgt_txt)) / (lvl * 1.005 - c) \
                 if lvl * 1.005 > c else 0
             if rr < 1.0:
                 continue
-            return {"state": "Possible upcoming Rejection",
-                    "price": round(c, 2), "target": tgt_txt,
-                    "stop": round(lvl * 1.005, 2),
-                    "note": f"{sorted(pats & set(BEAR_PAT))[0]} at {name} "
-                            f"{lvl:.2f} " + _votes(votes)}
-    # 3. reversal (long bias): at 20d-low / Fib / support + hammer + washed out
+            out.append({"state": "Possible upcoming Rejection",
+                        "price": round(c, 2), "target": tgt_txt,
+                        "stop": round(lvl * 1.005, 2),
+                        "note": f"{sorted(pats & set(BEAR_PAT))[0]} at {name} "
+                                f"{lvl:.2f} " + _votes(votes)})
+            break
+    # 3. reversal (long bias): 20d-low / Fib / support + hammer + washed out
     bull_pat = bool(pats & set(BULL_PAT))
-    for name, lvl in [("20d-low", lo20)] + [(f"fib{r}", v)
-                                            for r, v in fib.items()]:
-        if near(c, lvl, ZONE_TOL) and bull_pat and rsi < 45 and up_ok:
+    rlevels = [("20d-low", lo20)] + [(f"fib{r}", v) for r, v in fib.items()]
+    if sup:
+        rlevels.append(("support", max(sup)))
+    for name, lvl in rlevels:
+        if near(c, lvl, ZONE_TOL) and bull_pat and rsi < 45 and dn_ctx \
+                and m15_up:
             tgt, ext = objective(1)
             tgt_txt = f"{tgt:.2f}" if tgt else f"{ext['ext162']:.2f}"
             rr = (float(tgt_txt) - c) / (c - lvl * 0.995) \
                 if c > lvl * 0.995 else 0
             if rr < 1.0:
                 continue
-            return {"state": "Possible upcoming Reversal",
-                    "price": round(c, 2), "target": tgt_txt,
-                    "stop": round(lvl * 0.995, 2),
-                    "note": f"{sorted(pats & set(BULL_PAT))[0]} at {name} "
-                            f"{lvl:.2f} " + _votes(votes)}
-    return {"state": "-", "price": round(c, 2), "target": "-",
-            "stop": "-", "note": "no qualified state " + _votes(votes)}
+            out.append({"state": "Possible upcoming Reversal",
+                        "price": round(c, 2), "target": tgt_txt,
+                        "stop": round(lvl * 0.995, 2),
+                        "note": f"{sorted(pats & set(BULL_PAT))[0]} at {name} "
+                                f"{lvl:.2f} " + _votes(votes)})
+            break
+    return out
 
 
 def _votes(votes: dict) -> str:
@@ -224,7 +267,7 @@ def main() -> int:
     pxd = yf.download(syms, period="1y", interval="1d", auto_adjust=True,
                       progress=False, threads=True, group_by="ticker")
     lines, states = [], {}
-    prev = json.load(open(STATE)) if os.path.exists(STATE) else {}
+    prev = _load_state()
     for t in syms:
         try:
             h = pxd[t] if len(syms) > 1 else pxd
@@ -244,14 +287,16 @@ def main() -> int:
                         _f["Close"].ewm(span=26, adjust=False).mean()
                     _f["macd"] = _m
                     _f["macd_sig"] = _m.ewm(span=9, adjust=False).mean()
-            r = analyze(t, d, h1, m15)
-            key = (r["state"], r["price"], r["note"])
-            states[t] = {"state": r["state"], "note": r["note"]}
-            if r["state"] != "-" and prev.get(t) != states[t]:
-                lines.append(
-                    f'"{t} - {r["state"]} - at {r["price"]} price - '
-                    f'target price {r["target"]} - '
-                    f'stop loss {r["stop"]}. ({r["note"]})')
+            results = analyze(t, d, h1, m15)
+            cur = {}
+            for r in results:
+                cur[r["state"]] = r["note"]
+                if prev.get(t, {}).get(r["state"]) != r["note"]:
+                    lines.append(
+                        f'"{t} - {r["state"]} - at {r["price"]} price - '
+                        f'target price {r["target"]} - '
+                        f'stop loss {r["stop"]}. ({r["note"]})')
+            states[t] = cur
         except Exception as e:
             print(f"skip {t}: {e}", flush=True)
     json.dump(states, open(STATE, "w"))
