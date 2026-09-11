@@ -1,0 +1,137 @@
+{
+ "model": "gbm",
+ "top_k": 10,
+ "n_days": 2547,
+ "table": [
+  {
+   "metric": "top-K minus universe mean (lift)",
+   "mean_R": -0.005,
+   "CI95": "[-0.0219, +0.0121]",
+   "random_mean": -0.0007,
+   "random_p95": 0.0125,
+   "beats_random": false
+  },
+  {
+   "metric": "top-K minus bottom-K (spread)",
+   "mean_R": 0.0119,
+   "CI95": "[-0.0150, +0.0392]",
+   "random_mean": -0.0009,
+   "random_p95": 0.0171,
+   "beats_random": false
+  },
+  {
+   "metric": "top-K absolute",
+   "mean_R": 0.1931,
+   "CI95": "",
+   "random_mean": 0.198,
+   "random_p95": "",
+   "beats_random": ""
+  },
+  {
+   "metric": "universe mean (pure beta)",
+   "mean_R": 0.198,
+   "CI95": "",
+   "random_mean": "",
+   "random_p95": "",
+   "beats_random": ""
+  }
+ ],
+ "yearly": [
+  {
+   "yr": 2016,
+   "top": 0.269,
+   "bot": 0.07,
+   "uni": 0.213,
+   "lift": 0.056,
+   "spread": 0.199
+  },
+  {
+   "yr": 2017,
+   "top": 0.396,
+   "bot": 0.459,
+   "uni": 0.433,
+   "lift": -0.037,
+   "spread": -0.063
+  },
+  {
+   "yr": 2018,
+   "top": -0.075,
+   "bot": 0.005,
+   "uni": 0.016,
+   "lift": -0.091,
+   "spread": -0.08
+  },
+  {
+   "yr": 2019,
+   "top": 0.443,
+   "bot": 0.264,
+   "uni": 0.39,
+   "lift": 0.053,
+   "spread": 0.179
+  },
+  {
+   "yr": 2020,
+   "top": 0.222,
+   "bot": 0.288,
+   "uni": 0.27,
+   "lift": -0.048,
+   "spread": -0.066
+  },
+  {
+   "yr": 2021,
+   "top": 0.19,
+   "bot": 0.049,
+   "uni": 0.164,
+   "lift": 0.027,
+   "spread": 0.141
+  },
+  {
+   "yr": 2022,
+   "top": -0.093,
+   "bot": -0.02,
+   "uni": -0.095,
+   "lift": 0.002,
+   "spread": -0.073
+  },
+  {
+   "yr": 2023,
+   "top": 0.289,
+   "bot": 0.197,
+   "uni": 0.224,
+   "lift": 0.065,
+   "spread": 0.092
+  },
+  {
+   "yr": 2024,
+   "top": 0.206,
+   "bot": 0.187,
+   "uni": 0.224,
+   "lift": -0.019,
+   "spread": 0.019
+  },
+  {
+   "yr": 2025,
+   "top": 0.121,
+   "bot": 0.279,
+   "uni": 0.195,
+   "lift": -0.074,
+   "spread": -0.157
+  },
+  {
+   "yr": 2026,
+   "top": 0.188,
+   "bot": 0.152,
+   "uni": 0.117,
+   "lift": 0.071,
+   "spread": 0.037
+  }
+ ],
+ "random_baseline": {
+  "lift_mean": -0.0006785662535515335,
+  "lift_sd": 0.007622576893537409,
+  "lift_p95": 0.012533607664685475,
+  "spread_mean": -0.0008993147625084531,
+  "spread_sd": 0.011554831662330381,
+  "spread_p95": 0.017122364440779858
+ }
+}

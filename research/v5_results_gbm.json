@@ -1,0 +1,113 @@
+{
+ "auc": 0.4932164488994055,
+ "brier": 0.25221813270290194,
+ "base_rate": 0.4461888769897795,
+ "n_oos": 96179,
+ "table": [
+  {
+   "rule": "take every bar (null: always trade)",
+   "thr": -1.0,
+   "trades": 96179,
+   "trades_pct": 100.0,
+   "win_rate": 0.446,
+   "expectancy_R": 0.2183,
+   "ci_lo": 0.191,
+   "ci_hi": 0.2429,
+   "pf": 1.41,
+   "grade": "B+",
+   "CI95": "[+0.191, +0.243]"
+  },
+  {
+   "rule": "shuffled probabilities (null)",
+   "thr": 0.5,
+   "trades": 21593,
+   "trades_pct": 22.5,
+   "win_rate": 0.445,
+   "expectancy_R": 0.212,
+   "ci_lo": 0.1802,
+   "ci_hi": 0.2428,
+   "pf": 1.39,
+   "grade": "B+",
+   "CI95": "[+0.180, +0.243]"
+  },
+  {
+   "rule": "repo primary: breakout ADX>=20 RVOL>=2",
+   "thr": NaN,
+   "trades": 466,
+   "trades_pct": 0.5,
+   "win_rate": 0.47,
+   "expectancy_R": 0.2768,
+   "ci_lo": 0.1345,
+   "ci_hi": 0.4138,
+   "pf": 1.54,
+   "grade": "B+",
+   "CI95": "[+0.135, +0.414]"
+  },
+  {
+   "rule": "model p >= q50",
+   "thr": 0.438,
+   "trades": 48422,
+   "trades_pct": 50.3,
+   "win_rate": 0.453,
+   "expectancy_R": 0.2202,
+   "ci_lo": 0.1812,
+   "ci_hi": 0.2623,
+   "pf": 1.42,
+   "grade": "B+",
+   "CI95": "[+0.181, +0.262]"
+  },
+  {
+   "rule": "model p >= q70",
+   "thr": 0.453,
+   "trades": 37617,
+   "trades_pct": 39.1,
+   "win_rate": 0.437,
+   "expectancy_R": 0.184,
+   "ci_lo": 0.1384,
+   "ci_hi": 0.2267,
+   "pf": 1.34,
+   "grade": "B+",
+   "CI95": "[+0.138, +0.227]"
+  },
+  {
+   "rule": "model p >= q80",
+   "thr": 0.5,
+   "trades": 21593,
+   "trades_pct": 22.5,
+   "win_rate": 0.391,
+   "expectancy_R": 0.0637,
+   "ci_lo": 0.0065,
+   "ci_hi": 0.121,
+   "pf": 1.11,
+   "grade": "B",
+   "CI95": "[+0.006, +0.121]"
+  },
+  {
+   "rule": "model p >= q90",
+   "thr": 0.505,
+   "trades": 10987,
+   "trades_pct": 11.4,
+   "win_rate": 0.431,
+   "expectancy_R": 0.1571,
+   "ci_lo": 0.0765,
+   "ci_hi": 0.2336,
+   "pf": 1.29,
+   "grade": "B+",
+   "CI95": "[+0.076, +0.234]"
+  },
+  {
+   "rule": "model p >= q95",
+   "thr": 0.505,
+   "trades": 10987,
+   "trades_pct": 11.4,
+   "win_rate": 0.431,
+   "expectancy_R": 0.1571,
+   "ci_lo": 0.0765,
+   "ci_hi": 0.2336,
+   "pf": 1.29,
+   "grade": "B+",
+   "CI95": "[+0.076, +0.234]"
+  }
+ ],
+ "beats_null": false
+}
