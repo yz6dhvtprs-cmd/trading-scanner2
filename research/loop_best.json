@@ -1,0 +1,65 @@
+{
+ "best": {
+  "AAPL": {
+   "trend": "macd",
+   "hi": "hi20_atr@1.0",
+   "lo": "close_atr@1.5",
+   "n": 81,
+   "hit_rate": 0.0617,
+   "he_med": 3.89,
+   "le_med": 2.78,
+   "dir_acc": 0.457,
+   "ticker": "AAPL"
+  },
+  "QQQ": {
+   "trend": "none",
+   "hi": "close_atr@1.5",
+   "lo": "close_atr@1.5",
+   "n": 81,
+   "hit_rate": 0.1358,
+   "he_med": 1.14,
+   "le_med": 1.63,
+   "dir_acc": 0.42,
+   "ticker": "QQQ"
+  },
+  "SPY": {
+   "trend": "none",
+   "hi": "close_atr@1.5",
+   "lo": "close_atr@1.5",
+   "n": 81,
+   "hit_rate": 0.284,
+   "he_med": 0.75,
+   "le_med": 1.21,
+   "dir_acc": 0.395,
+   "ticker": "SPY"
+  }
+ },
+ "sims": {
+  "AAPL": {
+   "trades_days": 19,
+   "flips": 1,
+   "equity": 25935.51,
+   "ret_pct": 3.74,
+   "buyhold_pct": 3.77,
+   "grade": "best"
+  },
+  "QQQ": {
+   "trades_days": 0,
+   "flips": 0,
+   "equity": 25000.0,
+   "ret_pct": 0.0,
+   "buyhold_pct": 3.01,
+   "grade": "bad"
+  },
+  "SPY": {
+   "trades_days": 0,
+   "flips": 0,
+   "equity": 25000.0,
+   "ret_pct": 0.0,
+   "buyhold_pct": 1.77,
+   "grade": "bad"
+  }
+ },
+ "spy_month_bh": 1.77,
+ "elapsed_s": 1
+}
