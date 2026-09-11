@@ -1,9 +1,9 @@
-"""Agent1 screener (hourly): confidence-ranked watchlist, 25 max + kickout.
+"""Agent1 screener (hourly): confidence-ranked watchlist, no cap.
 
 Usage: python scanner/screen.py --channels dry
-Reads universe_live.csv (top-50; full-pool rescan stays nightly).
+Reads universe_etf.csv (fixed QQQ/SPY top-25 union).
 Writes scanner/agent_watch.json: {ticker: {conf, dir, adx, updated}}.
-Top 25 by confidence survive; lowest is kicked. Change-only: logs only.
+Every scored name is tracked. Change-only: logs only.
 Confidence = 0.4*min(adx,50)/50 + 0.3*align + 0.2*|rsi-50|/50 + 0.1*confirms/4.
 """
 from __future__ import annotations
@@ -50,7 +50,7 @@ def main() -> int:
     a = ap.parse_args()
     import yfinance as yf
     tickers = pd.read_csv(os.path.join(
-        ROOT, "universe", "universe_live.csv"))["ticker"].tolist()
+        ROOT, "universe", "universe_etf.csv"))["ticker"].tolist()
     px = yf.download(tickers, period="1y", interval="1d", auto_adjust=True,
                      progress=False, threads=True, group_by="ticker")
     scored = {}
@@ -71,7 +71,9 @@ def main() -> int:
         print(f"screen ABORTED: only {len(scored)} tickers scored; "
               f"watchlist untouched", flush=True)
         return 1
-    top = dict(sorted(scored.items(), key=lambda kv: -kv[1]["conf"])[:MAXN])
+    top = dict(sorted(scored.items(), key=lambda kv: -kv[1]["conf"]))
+    # no cap: fixed ETF pool, every scored name is tracked (TOP10 text below
+    # still covers only the top 10 by confidence)
     prev = {}
     if os.path.exists(WATCH):
         prev = json.load(open(WATCH))

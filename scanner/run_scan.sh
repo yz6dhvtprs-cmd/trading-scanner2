@@ -19,7 +19,7 @@ case "$MODE" in
 esac
 case "$MODE" in
   nightly)
-    python scanner/scan.py --pool top50 --intraday --channels imessage \
+    python scanner/scan.py --pool etf --intraday --channels imessage \
       >> "$PROJ/scanner/logs/nightly-$STAMP.log" 2>&1
     ;;
   premarket)

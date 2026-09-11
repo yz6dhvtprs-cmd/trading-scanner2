@@ -37,7 +37,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, "scanner", "signal_log.csv")
 WATCH = os.path.join(ROOT, "scanner", "watchlist.csv")
 STATE = os.path.join(ROOT, "scanner", "intraday_state.json")
-CAP = 40
+# no cap: fixed ETF pool, every open/watchlist name is evaluated
 
 
 def pt_now():
@@ -96,7 +96,7 @@ def main() -> int:
     if len(wl):
         wl = wl[wl["date"] == wl["date"].max()]
     syms = sorted(set(open_tr["ticker"].tolist() if len(open_tr) else []) |
-                  set(wl["ticker"].tolist() if len(wl) else []))[:CAP]
+                  set(wl["ticker"].tolist() if len(wl) else []))
     if not syms:
         return 0
     px = yf.download(syms, period="1d", interval="15m", auto_adjust=True,

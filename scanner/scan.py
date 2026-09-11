@@ -213,7 +213,8 @@ def premarket_gate(row: dict, frames_detail) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--pool", default="top50", choices=["top50", "sp500"])
+    ap.add_argument("--pool", default="top50",
+                    choices=["top50", "sp500", "etf"])
     ap.add_argument("--mode", default="nightly", choices=["nightly", "premarket"])
     ap.add_argument("--channels", default="dry",
                     help="comma-separated: telegram,mac,imessage,shortcut:NAME,dry")
@@ -232,6 +233,9 @@ def main() -> int:
     if a.pool == "top50":
         tickers = pd.read_csv(os.path.join(
             ROOT, "universe", "universe_live.csv"))["ticker"].tolist()
+    elif a.pool == "etf":
+        tickers = pd.read_csv(os.path.join(
+            ROOT, "universe", "universe_etf.csv"))["ticker"].tolist()
     else:
         tickers = pd.read_csv(
             "https://raw.githubusercontent.com/datasets/s-and-p-500-companies"
