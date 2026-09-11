@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from baselines import compare_table, null_predictions  # noqa: E402
 from fetch_stock import add_indicators, download, fractal_swings  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -44,8 +45,26 @@ K = 3
 HIT_PCT = 1.0
 
 
-def load_daily(t: str) -> pd.DataFrame:
-    df = add_indicators(download(t, "2y", "1d"), "20d")
+def _cached(t: str, period: str) -> pd.DataFrame | None:
+    """Prefer the local cache so a scoreboard is reproducible offline. The
+    original code re-downloaded on every run, so two runs on different days
+    scored different windows and were not comparable."""
+    p = os.path.join(ROOT, "research", "_cache",
+                     f"{t.replace('^', '')}_1d.csv")
+    if not os.path.exists(p):
+        return None
+    df = pd.read_csv(p, parse_dates=["Date"]).set_index("Date").sort_index()
+    if period.endswith("y"):
+        yrs = int(period[:-1])
+        df = df[df.index >= df.index[-1] - pd.DateOffset(years=yrs)]
+    return df
+
+
+def load_daily(t: str, period: str = "2y") -> pd.DataFrame:
+    raw = _cached(t, period)
+    if raw is None:
+        raw = download(t, period, "1d")
+    df = add_indicators(raw, "20d")
     df = df.dropna(subset=["Close"]).reset_index()
     if "Date" not in df.columns:  # index had no name; first col is the date
         df = df.rename(columns={df.columns[0]: "Date"})
@@ -150,8 +169,8 @@ def next_swing_truth(df: pd.DataFrame, j: int) -> dict | None:
             "in_days": int(n["bar"]) - j}
 
 
-def run(t: str, version: str, asof: str | None) -> int:
-    df = load_daily(t)
+def run(t: str, version: str, asof: str | None, period: str = "2y") -> int:
+    df = load_daily(t, period)
     if "Date" not in df.columns and not isinstance(df.index,
                                                    pd.DatetimeIndex):
         df["Date"] = pd.date_range("2020-01-01", periods=len(df), freq="B")
@@ -165,6 +184,7 @@ def run(t: str, version: str, asof: str | None) -> int:
                       for b in full["bar"].to_numpy()
                       if int(b) + K >= 60 and int(b) + K < len(df) - K - 1})
         pts = [p for p in pts if p >= 60]
+    full_sw = fractal_swings(_with_dates(df), K)
     rows = []
     for j in pts:
         p = predict(df, j, version)
@@ -174,6 +194,7 @@ def run(t: str, version: str, asof: str | None) -> int:
         want_up = truth["side"] == "high"
         dir_ok = (p["direction"] == "up") == want_up
         err = abs(p["level"] - truth["level"]) / truth["level"] * 100
+        known = full_sw[full_sw["bar"] + K <= j]
         rows.append({"asof": str(df["Date"].iloc[j].date())
                      if hasattr(df["Date"].iloc[j], "date")
                      else str(df["Date"].iloc[j]),
@@ -181,7 +202,12 @@ def run(t: str, version: str, asof: str | None) -> int:
                      "pred_eta": p["eta"], "true_side": truth["side"],
                      "true_lvl": truth["level"], "true_in": truth["in_days"],
                      "err_pct": round(err, 2),
-                     "hit": bool(dir_ok and err <= HIT_PCT), "why": p["why"]})
+                     "hit": bool(dir_ok and err <= HIT_PCT), "why": p["why"],
+                     # carried only so the nulls can be scored on the same rows
+                     "_close": float(df["Close"].iloc[j]),
+                     "_atr": float(df["atr14"].iloc[j]),
+                     "_prev_side": (known.iloc[-1]["side"] if len(known)
+                                    else "low")})
     if not rows:
         print("no prediction points", flush=True)
         return 1
@@ -192,9 +218,38 @@ def run(t: str, version: str, asof: str | None) -> int:
         print(f"{version} {name}: n={len(s)} hits={int(s['hit'].sum())} "
               f"hit_rate={s['hit'].mean():.0%} med_err={s['err_pct'].median():.2f}% "
               f"mean_err={s['err_pct'].mean():.2f}%", flush=True)
-    print(r.to_string(index=False), flush=True)
-    r.to_csv(os.path.join(ROOT, "research", t.upper(),
-                          f"swingtest_{version}.csv"), index=False)
+
+    # --- mandatory null comparison -------------------------------------
+    # A hit rate with no null beside it is not interpretable. Several
+    # forecasters carrying zero information clear 20%+ on this very rule,
+    # so a bare "12%" reads as skill when it is in fact below chance.
+    nulls = null_predictions(r["_close"].to_numpy(), r["_atr"].to_numpy(),
+                             r["_prev_side"].to_numpy())
+    tbl = compare_table(r["hit"].to_numpy(), nulls,
+                        r["true_side"].to_numpy(), r["true_lvl"].to_numpy(),
+                        HIT_PCT)
+    print(f"\n--- {version} vs information-free nulls (same {n} points, "
+          f"paired McNemar) ---", flush=True)
+    print(pd.DataFrame(tbl).to_string(index=False), flush=True)
+    worse = [x for x in tbl if x["verdict"] == "model worse"]
+    if worse:
+        print(f"\nVERDICT: {version} is significantly WORSE than "
+              f"{len(worse)} of {len(tbl)} zero-information baselines. "
+              f"It has no demonstrated skill on this metric.", flush=True)
+    elif any(x["verdict"] == "model better" for x in tbl):
+        print(f"\nVERDICT: {version} beats every null tested.", flush=True)
+    else:
+        print(f"\nVERDICT: {version} is statistically indistinguishable from "
+              f"the nulls. Not evidence of skill.", flush=True)
+
+    r = r.drop(columns=[c for c in r.columns if c.startswith("_")])
+    print("\n" + r.to_string(index=False), flush=True)
+    outdir = os.path.join(ROOT, "research", t.upper())
+    os.makedirs(outdir, exist_ok=True)
+    # period-tagged so a longer-window run never clobbers the 2y artifact
+    suffix = "" if period == "2y" else f"_{period}"
+    r.to_csv(os.path.join(outdir, f"swingtest_{version}{suffix}.csv"),
+             index=False)
     return 0
 
 
@@ -203,8 +258,10 @@ def main() -> int:
     ap.add_argument("--ticker", required=True)
     ap.add_argument("--version", default="v1")
     ap.add_argument("--asof", default=None)
+    ap.add_argument("--period", default="2y",
+                    help="history window, e.g. 2y or 15y")
     a = ap.parse_args()
-    return run(a.ticker.upper(), a.version, a.asof)
+    return run(a.ticker.upper(), a.version, a.asof, a.period)
 
 
 if __name__ == "__main__":

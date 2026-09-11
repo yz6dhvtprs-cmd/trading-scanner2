@@ -9,3 +9,9 @@ scanner/logs/
 scanner/agent_watch.json
 scanner/*_state.json
 scanner/inbox_state.json
+research/_cache/
+research/v5_oos_predictions.csv
+research/cs_oos_predictions.csv
+.secrets/
+research/_cache_intraday/
+research/intraday_oos.csv

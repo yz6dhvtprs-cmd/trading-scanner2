@@ -1,0 +1,711 @@
+asof,pred_dir,pred_lvl,pred_eta,true_side,true_lvl,true_in,err_pct,hit,why
+2011-12-09,down,19.17,3,low,19.68,1,2.59,False,v2 weak-down 0.786 retrace
+2011-12-15,down,19.78,1,high,20.38,4,2.94,False,v2 range mid+0.272
+2011-12-27,up,20.26,1,high,21.94,7,7.66,False,v2 weak-up 0.786 retrace
+2012-01-11,up,23.26,5,high,23.31,7,0.21,True,v2 strong-up 1.618 ext
+2012-01-17,up,22.34,1,high,23.31,4,4.16,False,v2 strong-up 1.618 ext
+2012-01-26,up,24.55,5,low,22.44,2,9.4,False,v2 strong-up 1.618 ext
+2012-02-02,up,23.85,2,high,23.97,5,0.5,True,v2 strong-up 1.618 ext
+2012-02-14,up,24.92,4,high,24.82,5,0.4,True,v2 strong-up 1.618 ext
+2012-02-15,up,23.97,1,high,24.82,4,3.42,False,v2 range mid+0.272
+2012-02-17,up,23.84,2,high,24.82,2,3.95,False,v2 range mid+0.272
+2012-02-27,up,25.71,3,high,25.41,4,1.18,False,v2 strong-up 1.618 ext
+2012-03-07,up,25.77,2,high,25.81,7,0.15,True,v2 strong-up 1.618 ext
+2012-03-09,up,25.87,2,high,25.81,5,0.23,True,v2 strong-up 1.618 ext
+2012-03-21,up,26.51,5,low,24.85,2,6.68,False,v2 strong-up 1.618 ext
+2012-03-28,up,26.4,4,low,23.68,9,11.49,False,v2 strong-up 1.618 ext
+2012-03-30,up,25.44,1,low,23.68,7,7.43,False,v2 range mid+0.272
+2012-04-02,up,25.62,1,low,23.68,6,8.19,False,v2 range mid+0.272
+2012-04-16,down,24.12,1,high,25.76,4,6.37,False,v2 range mid+0.272
+2012-04-25,up,25.29,1,high,25.33,4,0.16,True,v2 range mid+0.272
+2012-05-04,down,25.42,3,low,23.58,3,7.8,False,v2 weak-down 0.786 retrace
+2012-05-14,down,23.95,1,low,22.58,7,6.07,False,v2 weak-down 0.786 retrace
+2012-05-16,down,23.82,1,low,22.58,5,5.49,False,v2 weak-down 0.786 retrace
+2012-05-29,down,23.04,1,low,22.33,4,3.18,False,v2 weak-down 0.786 retrace
+2012-06-01,down,22.05,1,low,22.33,1,1.25,False,v2 strong-down 1.618 ext
+2012-06-07,down,22.57,1,high,23.51,2,4.0,False,v2 weak-down 0.786 retrace
+2012-06-14,down,22.6,1,high,24.55,5,7.94,False,v2 range mid+0.272
+2012-06-26,up,24.31,2,low,23.2,2,4.78,False,v2 range mid+0.272
+2012-07-03,up,24.26,1,high,24.27,1,0.04,True,v2 weak-up 0.786 retrace
+2012-07-10,down,23.44,1,low,22.5,2,4.18,False,v2 range mid+0.272
+2012-07-17,down,22.88,1,high,24.48,3,6.54,False,v2 weak-down 0.786 retrace
+2012-07-25,down,22.95,1,high,23.54,2,2.51,False,v2 range mid+0.272
+2012-07-30,up,24.1,2,low,22.84,3,5.52,False,v2 weak-up 0.786 retrace
+2012-08-01,down,22.88,1,low,22.84,1,0.18,True,v2 range mid+0.272
+2012-08-07,up,23.38,1,high,24.17,2,3.27,False,v2 range mid+0.272
+2012-08-14,up,23.89,1,high,24.57,5,2.77,False,v2 weak-up 0.786 retrace
+2012-08-24,up,24.48,1,high,24.57,1,0.37,True,v2 weak-up 0.786 retrace
+2012-08-28,up,24.42,1,low,23.93,4,2.05,False,v2 weak-up 0.786 retrace
+2012-08-30,up,24.41,1,low,23.93,2,2.01,False,v2 range mid+0.272
+2012-09-07,up,24.42,1,low,24.13,4,1.2,False,v2 range mid+0.272
+2012-09-11,up,24.68,1,low,24.13,2,2.28,False,v2 weak-up 0.786 retrace
+2012-09-18,up,24.73,1,high,25.09,3,1.43,False,v2 weak-up 0.786 retrace
+2012-09-26,up,24.88,3,low,23.35,3,6.55,False,v2 weak-up 0.786 retrace
+2012-10-04,down,23.75,1,high,24.01,1,1.08,False,v2 range mid+0.272
+2012-10-10,down,22.94,1,low,22.86,2,0.35,True,v2 strong-down 1.618 ext
+2012-10-17,down,23.11,1,low,22.03,4,4.9,False,v2 weak-down 0.786 retrace
+2012-10-19,down,22.4,1,low,22.03,2,1.68,False,v2 strong-down 1.618 ext
+2012-10-26,down,21.05,4,high,23.97,5,12.18,False,v2 strong-down 1.618 ext
+2012-11-09,down,22.47,1,low,21.08,5,6.59,False,v2 range mid+0.272
+2012-11-21,down,21.74,1,high,22.22,1,2.16,False,v2 range mid+0.272
+2012-11-28,down,21.32,2,low,21.01,5,1.48,False,v2 weak-down 0.786 retrace
+2012-12-10,down,21.27,1,high,22.1,2,3.76,False,v2 weak-down 0.786 retrace
+2012-12-17,down,21.24,1,high,22.19,2,4.28,False,v2 weak-down 0.786 retrace
+2012-12-20,up,21.93,1,low,21.1,6,3.93,False,v2 range mid+0.272
+2012-12-24,up,22.01,1,low,21.1,4,4.31,False,v2 weak-up 0.786 retrace
+2013-01-04,down,21.35,1,low,21.03,5,1.52,False,v2 range mid+0.272
+2013-01-07,down,21.35,1,low,21.03,4,1.52,False,v2 range mid+0.272
+2013-01-16,down,21.29,1,low,21.61,3,1.48,False,v2 range mid+0.272
+2013-01-25,up,21.48,2,high,22.59,1,4.91,False,v2 range mid+0.272
+2013-01-30,up,22.38,1,low,21.69,6,3.18,False,v2 weak-up 0.786 retrace
+2013-01-31,up,22.59,2,low,21.69,5,4.15,False,v2 range mid+0.272
+2013-02-12,up,22.38,1,high,22.75,5,1.63,False,v2 range mid+0.272
+2013-02-25,up,22.52,1,low,22.05,2,2.13,False,v2 weak-up 0.786 retrace
+2013-02-26,up,22.58,2,low,22.05,1,2.4,False,v2 weak-up 0.786 retrace
+2013-03-04,up,22.03,3,high,23.03,1,4.34,False,v2 weak-up 0.786 retrace
+2013-03-08,up,22.82,1,low,22.3,2,2.33,False,v2 weak-up 0.786 retrace
+2013-03-15,up,22.87,1,high,22.99,3,0.52,True,v2 weak-up 0.786 retrace
+2013-03-25,up,22.83,1,high,23.36,6,2.27,False,v2 range mid+0.272
+2013-03-28,up,22.89,1,high,23.36,3,2.01,False,v2 range mid+0.272
+2013-04-08,up,23.19,1,high,24.46,2,5.19,False,v2 weak-up 0.786 retrace
+2013-04-10,up,23.78,3,low,23.0,6,3.39,False,v2 strong-up 1.618 ext
+2013-04-15,up,24.08,3,low,23.0,3,4.7,False,v2 weak-up 0.786 retrace
+2013-04-23,up,25.36,2,high,27.36,9,7.31,False,v2 strong-up 1.618 ext
+2013-05-09,up,30.05,8,low,26.08,1,15.22,False,v2 strong-up 1.618 ext
+2013-05-15,up,28.15,1,high,28.66,4,1.78,False,v2 strong-up 1.618 ext
+2013-05-24,up,30.25,5,low,27.98,7,8.11,False,v2 strong-up 1.618 ext
+2013-05-29,up,29.35,2,low,27.98,5,4.9,False,v2 strong-up 1.618 ext
+2013-05-30,up,27.54,2,low,27.98,4,1.57,False,v2 range mid+0.272
+2013-06-10,up,28.25,1,low,27.83,4,1.51,False,v2 strong-up 1.618 ext
+2013-06-12,up,29.74,3,low,27.83,2,6.86,False,v2 strong-up 1.618 ext
+2013-06-19,up,28.79,2,low,26.46,3,8.81,False,v2 range mid+0.272
+2013-06-21,down,27.99,2,low,26.46,1,5.78,False,v2 weak-down 0.786 retrace
+2013-06-27,down,26.91,3,high,28.43,2,5.35,False,v2 weak-down 0.786 retrace
+2013-07-05,down,26.88,2,high,29.6,7,9.19,False,v2 weak-down 0.786 retrace
+2013-07-10,up,28.17,1,high,29.6,4,4.83,False,v2 range mid+0.272
+2013-07-19,up,29.1,7,low,25.36,5,14.75,False,v2 weak-up 0.786 retrace
+2013-07-24,down,26.2,1,low,25.36,2,3.31,False,v2 range mid+0.272
+2013-07-31,up,25.33,1,low,25.39,5,0.24,False,v2 weak-up 0.786 retrace
+2013-08-02,down,25.53,1,low,25.39,3,0.55,True,v2 range mid+0.272
+2013-08-12,down,25.55,3,high,27.3,2,6.41,False,v2 range mid+0.272
+2013-08-13,up,26.55,1,high,27.3,1,2.75,False,v2 weak-up 0.786 retrace
+2013-08-19,up,27.21,5,high,28.8,4,5.52,False,v2 weak-up 0.786 retrace
+2013-08-20,down,25.7,1,high,28.8,3,10.76,False,v2 range mid+0.272
+2013-08-28,up,27.99,2,low,25.32,5,10.55,False,v2 range mid+0.272
+2013-09-10,up,28.06,3,high,27.56,7,1.81,False,v2 weak-up 0.786 retrace
+2013-09-24,down,25.83,2,high,27.84,6,7.22,False,v2 range mid+0.272
+2013-09-27,up,27.27,1,high,27.84,3,2.05,False,v2 range mid+0.272
+2013-10-07,up,27.51,1,low,26.84,1,2.5,False,v2 weak-up 0.786 retrace
+2013-10-11,up,27.63,1,high,28.63,2,3.49,False,v2 weak-up 0.786 retrace
+2013-10-18,up,29.74,3,high,28.8,1,3.26,False,v2 strong-up 1.618 ext
+2013-10-24,up,28.76,3,high,29.69,1,3.13,False,v2 weak-up 0.786 retrace
+2013-10-29,up,29.62,1,high,31.27,6,5.28,False,v2 strong-up 1.618 ext
+2013-10-30,up,31.06,5,high,31.27,5,0.67,True,v2 strong-up 1.618 ext
+2013-11-11,up,32.25,4,high,31.22,2,3.3,False,v2 strong-up 1.618 ext
+2013-11-18,up,30.99,1,low,30.23,1,2.51,False,v2 range mid+0.272
+2013-11-22,up,30.22,2,high,32.14,7,5.97,False,v2 range mid+0.272
+2013-12-09,up,33.32,4,high,32.07,1,3.9,False,v2 strong-up 1.618 ext
+2013-12-10,up,31.82,1,low,29.29,6,8.64,False,v2 weak-up 0.786 retrace
+2013-12-13,down,30.97,2,low,29.29,3,5.74,False,v2 range mid+0.272
+2013-12-23,down,29.88,1,high,31.02,3,3.68,False,v2 weak-down 0.786 retrace
+2014-01-02,down,29.66,2,low,28.55,8,3.89,False,v2 weak-down 0.786 retrace
+2014-01-17,down,29.08,2,low,29.28,3,0.68,True,v2 weak-down 0.786 retrace
+2014-01-22,down,28.97,1,low,29.28,1,1.06,False,v2 weak-down 0.786 retrace
+2014-01-28,down,29.56,1,high,31.32,4,5.62,False,v2 range mid+0.272
+2014-01-29,up,30.6,1,high,31.32,3,2.3,False,v2 weak-up 0.786 retrace
+2014-02-06,up,31.24,2,high,31.86,10,1.95,False,v2 weak-up 0.786 retrace
+2014-02-11,up,30.91,1,high,31.86,7,2.98,False,v2 weak-up 0.786 retrace
+2014-02-26,up,31.34,1,high,31.96,4,1.94,False,v2 weak-up 0.786 retrace
+2014-03-03,up,31.65,1,high,31.96,1,0.97,True,v2 weak-up 0.786 retrace
+2014-03-07,up,31.73,1,low,31.16,5,1.83,False,v2 weak-up 0.786 retrace
+2014-03-12,up,31.82,1,low,31.16,2,2.12,False,v2 weak-up 0.786 retrace
+2014-03-19,up,31.28,3,high,34.05,4,8.14,False,v2 range mid+0.272
+2014-03-28,up,33.39,1,high,34.6,3,3.5,False,v2 range mid+0.272
+2014-04-01,up,34.9,1,high,34.6,1,0.87,True,v2 strong-up 1.618 ext
+2014-04-07,up,34.19,2,high,33.8,3,1.15,False,v2 weak-up 0.786 retrace
+2014-04-15,up,34.42,2,high,33.57,1,2.53,False,v2 range mid+0.272
+2014-04-17,down,32.63,1,low,32.64,4,0.03,True,v2 weak-down 0.786 retrace
+2014-04-22,down,32.58,1,low,32.64,2,0.18,True,v2 weak-down 0.786 retrace
+2014-04-29,up,33.36,1,low,31.99,6,4.28,False,v2 range mid+0.272
+2014-05-01,up,33.94,1,low,31.99,4,6.1,False,v2 weak-up 0.786 retrace
+2014-05-12,up,33.77,1,high,33.88,1,0.32,True,v2 range mid+0.272
+2014-05-16,down,32.39,2,high,33.77,5,4.09,False,v2 weak-down 0.786 retrace
+2014-05-21,up,33.65,1,high,33.77,2,0.36,True,v2 range mid+0.272
+2014-05-29,up,33.56,1,low,33.34,4,0.66,False,v2 range mid+0.272
+2014-06-09,up,33.67,2,low,33.7,3,0.09,False,v2 range mid+0.272
+2014-06-11,up,34.53,1,low,33.7,1,2.46,False,v2 weak-up 0.786 retrace
+2014-06-17,up,35.56,2,low,34.66,7,2.6,False,v2 strong-up 1.618 ext
+2014-06-20,up,35.9,3,low,34.66,4,3.58,False,v2 strong-up 1.618 ext
+2014-07-01,up,34.97,1,low,34.34,6,1.83,False,v2 weak-up 0.786 retrace
+2014-07-02,up,35.23,1,low,34.34,5,2.59,False,v2 weak-up 0.786 retrace
+2014-07-15,up,35.14,1,high,38.24,2,8.11,False,v2 range mid+0.272
+2014-07-22,up,37.35,1,high,38.02,1,1.76,False,v2 range mid+0.272
+2014-07-28,down,38.07,3,low,35.31,7,7.82,False,v2 weak-down 0.786 retrace
+2014-08-11,up,37.4,2,high,38.27,9,2.27,False,v2 range mid+0.272
+2014-08-27,up,40.1,6,low,37.48,4,6.99,False,v2 strong-up 1.618 ext
+2014-09-08,up,38.76,1,high,39.58,4,2.07,False,v2 strong-up 1.618 ext
+2014-09-17,up,40.88,4,high,40.04,2,2.1,False,v2 strong-up 1.618 ext
+2014-09-18,up,40.06,2,high,40.04,1,0.05,True,v2 strong-up 1.618 ext
+2014-09-24,up,40.81,3,low,38.52,2,5.94,False,v2 strong-up 1.618 ext
+2014-10-01,up,39.69,2,high,39.47,5,0.56,True,v2 range mid+0.272
+2014-10-13,down,38.72,3,low,35.44,2,9.26,False,v2 weak-down 0.786 retrace
+2014-10-20,down,36.3,1,high,39.48,4,8.05,False,v2 weak-down 0.786 retrace
+2014-10-29,up,38.56,1,high,42.13,12,8.47,False,v2 range mid+0.272
+2014-11-19,up,41.53,1,low,40.05,5,3.7,False,v2 range mid+0.272
+2014-12-02,up,41.68,1,high,41.56,2,0.29,True,v2 weak-up 0.786 retrace
+2014-12-09,up,41.22,2,low,38.03,6,8.39,False,v2 range mid+0.272
+2014-12-22,down,38.79,2,high,41.34,1,6.17,False,v2 weak-down 0.786 retrace
+2014-12-29,down,38.74,2,low,38.53,6,0.55,True,v2 weak-down 0.786 retrace
+2015-01-12,down,39.17,1,high,40.58,1,3.47,False,v2 range mid+0.272
+2015-01-16,down,39.0,1,high,40.14,4,2.84,False,v2 range mid+0.272
+2015-01-22,down,38.76,1,high,40.14,1,3.44,False,v2 weak-down 0.786 retrace
+2015-01-28,down,37.1,3,low,34.08,3,8.86,False,v2 strong-down 1.618 ext
+2015-02-05,down,35.38,1,high,36.24,1,2.37,False,v2 weak-down 0.786 retrace
+2015-02-11,down,34.54,2,high,37.53,3,7.97,False,v2 weak-down 0.786 retrace
+2015-02-20,down,36.53,1,high,37.79,2,3.33,False,v2 range mid+0.272
+2015-02-27,down,37.59,1,low,34.64,10,8.52,False,v2 range mid+0.272
+2015-03-18,up,37.12,2,high,36.83,4,0.79,True,v2 weak-up 0.786 retrace
+2015-03-27,down,35.14,1,low,34.22,4,2.69,False,v2 range mid+0.272
+2015-04-08,down,34.78,1,low,35.11,7,0.94,True,v2 weak-down 0.786 retrace
+2015-04-22,up,34.91,3,high,42.26,6,17.39,False,v2 range mid+0.272
+2015-05-05,up,46.68,10,low,39.26,1,18.9,False,v2 strong-up 1.618 ext
+2015-05-11,up,44.11,5,high,41.72,4,5.73,False,v2 strong-up 1.618 ext
+2015-05-20,up,41.16,1,low,39.66,3,3.78,False,v2 range mid+0.272
+2015-05-29,up,41.25,2,low,39.03,7,5.69,False,v2 range mid+0.272
+2015-06-02,up,40.87,1,low,39.03,5,4.71,False,v2 range mid+0.272
+2015-06-12,down,39.5,1,low,38.65,1,2.2,False,v2 weak-down 0.786 retrace
+2015-06-16,down,39.3,1,high,40.21,3,2.26,False,v2 weak-down 0.786 retrace
+2015-06-18,down,39.0,2,high,40.21,1,3.01,False,v2 weak-down 0.786 retrace
+2015-06-24,down,38.98,1,high,39.74,2,1.91,False,v2 weak-down 0.786 retrace
+2015-07-01,down,39.84,3,low,37.19,3,7.13,False,v2 weak-down 0.786 retrace
+2015-07-06,down,38.16,1,low,37.19,1,2.61,False,v2 weak-down 0.786 retrace
+2015-07-10,down,37.31,2,high,40.64,7,8.19,False,v2 weak-down 0.786 retrace
+2015-07-24,up,39.85,1,low,38.46,2,3.61,False,v2 range mid+0.272
+2015-07-31,up,40.17,1,high,41.56,3,3.34,False,v2 weak-up 0.786 retrace
+2015-08-10,up,40.9,1,low,39.25,2,4.2,False,v2 weak-up 0.786 retrace
+2015-08-17,up,41.07,1,high,40.99,1,0.2,True,v2 weak-up 0.786 retrace
+2015-08-21,down,39.65,3,low,34.33,1,15.5,False,v2 range mid+0.272
+2015-08-27,down,35.76,3,high,38.16,1,6.29,False,v2 weak-down 0.786 retrace
+2015-09-02,down,35.15,3,high,38.37,4,8.39,False,v2 weak-down 0.786 retrace
+2015-09-04,down,36.5,1,high,38.37,2,4.87,False,v2 range mid+0.272
+2015-09-14,up,37.86,1,high,38.89,3,2.65,False,v2 weak-up 0.786 retrace
+2015-09-22,up,38.78,1,high,38.66,3,0.31,True,v2 weak-up 0.786 retrace
+2015-09-30,up,38.84,1,high,41.09,7,5.48,False,v2 range mid+0.272
+2015-10-02,up,38.33,1,high,41.09,5,6.72,False,v2 range mid+0.272
+2015-10-14,up,40.26,1,high,46.99,9,14.32,False,v2 weak-up 0.786 retrace
+2015-10-30,up,50.64,7,low,45.48,1,11.35,False,v2 strong-up 1.618 ext
+2015-11-04,up,47.92,1,high,47.52,2,0.84,True,v2 strong-up 1.618 ext
+2015-11-05,up,45.48,2,high,47.52,1,4.29,False,v2 range mid+0.272
+2015-11-11,up,47.05,1,low,45.4,2,3.63,False,v2 range mid+0.272
+2015-11-18,up,47.04,1,high,47.56,1,1.09,False,v2 range mid+0.272
+2015-11-24,up,47.07,1,low,46.92,6,0.32,False,v2 range mid+0.272
+2015-12-08,up,47.96,1,low,46.71,4,2.68,False,v2 strong-up 1.618 ext
+2015-12-09,up,50.17,3,low,46.71,3,7.41,False,v2 strong-up 1.618 ext
+2015-12-17,up,48.42,1,low,47.01,1,3.0,False,v2 range mid+0.272
+2015-12-22,up,48.79,1,high,49.46,4,1.35,False,v2 range mid+0.272
+2015-12-23,up,48.9,1,high,49.46,3,1.13,False,v2 weak-up 0.786 retrace
+2016-01-04,up,48.94,1,high,47.05,7,4.02,False,v2 weak-up 0.786 retrace
+2016-01-19,down,47.6,4,low,42.72,1,11.42,False,v2 range mid+0.272
+2016-01-25,down,43.65,1,low,44.39,2,1.67,False,v2 weak-down 0.786 retrace
+2016-01-28,down,43.38,2,high,47.93,1,9.49,False,v2 weak-down 0.786 retrace
+2016-02-01,up,45.49,2,low,41.93,5,8.49,False,v2 range mid+0.272
+2016-02-03,up,47.17,2,low,41.93,3,12.5,False,v2 weak-up 0.786 retrace
+2016-02-04,down,47.93,2,low,41.93,2,14.31,False,v2 range mid+0.272
+2016-02-11,down,43.3,1,high,46.45,6,6.78,False,v2 range mid+0.272
+2016-02-25,down,42.9,2,high,46.42,5,7.58,False,v2 weak-down 0.786 retrace
+2016-02-29,down,44.55,1,high,46.42,3,4.03,False,v2 range mid+0.272
+2016-03-08,down,44.54,1,high,48.2,7,7.59,False,v2 range mid+0.272
+2016-03-10,up,45.94,1,high,48.2,5,4.69,False,v2 range mid+0.272
+2016-03-22,up,47.37,1,low,46.74,3,1.35,False,v2 weak-up 0.786 retrace
+2016-03-24,up,47.81,1,low,46.74,1,2.29,False,v2 weak-up 0.786 retrace
+2016-03-31,up,46.66,2,high,48.78,2,4.35,False,v2 weak-up 0.786 retrace
+2016-04-07,up,48.34,1,low,47.11,3,2.61,False,v2 weak-up 0.786 retrace
+2016-04-11,up,48.51,1,low,47.11,1,2.97,False,v2 weak-up 0.786 retrace
+2016-04-15,up,47.42,2,high,49.75,2,4.68,False,v2 range mid+0.272
+2016-04-22,down,47.71,3,low,43.25,5,10.31,False,v2 range mid+0.272
+2016-05-04,down,44.73,1,high,45.65,9,2.02,False,v2 range mid+0.272
+2016-05-20,down,43.76,1,high,46.77,6,6.44,False,v2 weak-down 0.786 retrace
+2016-05-24,down,44.35,2,high,46.77,4,5.17,False,v2 range mid+0.272
+2016-06-03,up,46.17,1,low,43.29,6,6.65,False,v2 weak-up 0.786 retrace
+2016-06-08,up,46.51,1,low,43.29,3,7.44,False,v2 weak-up 0.786 retrace
+2016-06-16,down,43.8,1,high,45.94,5,4.66,False,v2 range mid+0.272
+2016-06-28,down,43.86,1,high,45.64,3,3.9,False,v2 weak-down 0.786 retrace
+2016-06-30,down,43.15,3,high,45.64,1,5.46,False,v2 weak-down 0.786 retrace
+2016-07-07,down,43.09,3,low,46.71,8,7.75,False,v2 weak-down 0.786 retrace
+2016-07-11,up,45.37,1,low,46.71,6,2.87,False,v2 range mid+0.272
+2016-07-22,up,46.2,5,high,50.56,2,8.62,False,v2 range mid+0.272
+2016-07-25,up,52.29,3,high,50.56,1,3.42,False,v2 strong-up 1.618 ext
+2016-07-29,up,50.81,1,high,51.62,7,1.57,False,v2 strong-up 1.618 ext
+2016-08-02,up,51.42,2,high,51.62,5,0.39,True,v2 strong-up 1.618 ext
+2016-08-12,up,53.13,4,high,51.62,1,2.93,False,v2 strong-up 1.618 ext
+2016-08-18,up,51.62,1,low,50.79,1,1.63,False,v2 range mid+0.272
+2016-08-24,up,51.43,1,high,52.12,2,1.32,False,v2 range mid+0.272
+2016-08-31,up,52.94,4,low,50.62,1,4.58,False,v2 strong-up 1.618 ext
+2016-09-07,up,51.78,1,low,49.38,3,4.86,False,v2 range mid+0.272
+2016-09-08,down,50.84,1,low,49.38,2,2.96,False,v2 weak-down 0.786 retrace
+2016-09-15,down,49.87,2,low,50.33,8,0.91,True,v2 weak-down 0.786 retrace
+2016-09-30,up,50.11,2,low,50.59,2,0.95,False,v2 range mid+0.272
+2016-10-04,up,51.35,1,high,51.85,4,0.96,True,v2 range mid+0.272
+2016-10-07,up,51.41,1,high,51.85,1,0.85,True,v2 range mid+0.272
+2016-10-13,up,51.58,2,low,50.31,5,2.52,False,v2 weak-up 0.786 retrace
+2016-10-18,up,51.43,1,low,50.31,2,2.23,False,v2 range mid+0.272
+2016-10-25,up,50.5,7,low,51.96,8,2.81,False,v2 strong-up 1.618 ext
+2016-10-28,up,57.07,7,low,51.96,5,9.83,False,v2 strong-up 1.618 ext
+2016-11-09,up,53.95,1,low,50.86,3,6.08,False,v2 weak-up 0.786 retrace
+2016-11-11,up,53.51,2,low,50.86,1,5.21,False,v2 range mid+0.272
+2016-11-17,down,51.53,4,high,54.76,3,5.9,False,v2 weak-down 0.786 retrace
+2016-11-28,up,53.87,1,high,54.9,1,1.88,False,v2 range mid+0.272
+2016-11-30,up,54.54,1,low,52.57,2,3.75,False,v2 weak-up 0.786 retrace
+2016-12-02,up,54.65,2,low,55.53,10,1.58,False,v2 weak-up 0.786 retrace
+2016-12-07,up,54.37,1,low,55.53,7,2.09,False,v2 range mid+0.272
+2016-12-21,up,57.36,1,high,57.3,1,0.1,True,v2 strong-up 1.618 ext
+2016-12-28,up,58.39,3,low,55.45,2,5.3,False,v2 strong-up 1.618 ext
+2017-01-05,up,56.88,2,low,55.38,5,2.71,False,v2 range mid+0.272
+2017-01-10,up,55.45,1,low,55.38,2,0.13,False,v2 range mid+0.272
+2017-01-18,down,55.66,1,high,58.92,7,5.53,False,v2 weak-down 0.786 retrace
+2017-02-01,up,58.11,2,low,56.1,1,3.58,False,v2 range mid+0.272
+2017-02-07,up,58.32,2,high,58.68,7,0.61,True,v2 weak-up 0.786 retrace
+2017-02-22,up,58.09,1,high,58.45,5,0.62,True,v2 range mid+0.272
+2017-02-27,up,58.44,1,high,58.45,2,0.02,True,v2 range mid+0.272
+2017-03-06,up,58.26,1,high,58.69,4,0.73,True,v2 range mid+0.272
+2017-03-08,down,57.48,2,high,58.69,2,2.06,False,v2 weak-down 0.786 retrace
+2017-03-15,up,58.35,1,high,58.91,4,0.95,True,v2 range mid+0.272
+2017-03-17,up,58.48,1,high,58.91,2,0.73,True,v2 weak-up 0.786 retrace
+2017-03-24,up,58.65,1,high,59.67,8,1.71,False,v2 weak-up 0.786 retrace
+2017-03-27,up,58.63,1,high,59.67,7,1.74,False,v2 range mid+0.272
+2017-04-10,up,59.21,1,low,58.33,1,1.51,False,v2 range mid+0.272
+2017-04-17,up,59.38,1,low,58.36,2,1.75,False,v2 weak-up 0.786 retrace
+2017-04-19,up,59.02,1,high,62.7,9,5.87,False,v2 range mid+0.272
+2017-04-24,up,59.03,3,high,62.7,6,5.85,False,v2 range mid+0.272
+2017-05-05,up,65.38,6,high,62.56,3,4.51,False,v2 strong-up 1.618 ext
+2017-05-15,up,62.67,2,high,62.81,1,0.22,True,v2 range mid+0.272
+2017-05-19,up,62.76,3,low,62.82,8,0.1,False,v2 weak-up 0.786 retrace
+2017-05-23,up,64.1,3,low,62.82,6,2.04,False,v2 strong-up 1.618 ext
+2017-06-06,up,64.11,2,low,61.63,4,4.02,False,v2 strong-up 1.618 ext
+2017-06-08,up,67.85,3,low,61.63,2,10.09,False,v2 strong-up 1.618 ext
+2017-06-15,up,64.95,2,high,64.86,7,0.14,True,v2 range mid+0.272
+2017-06-29,down,62.32,1,low,61.53,2,1.28,False,v2 weak-down 0.786 retrace
+2017-07-07,down,62.24,1,high,67.32,14,7.55,False,v2 weak-down 0.786 retrace
+2017-08-01,up,66.91,2,low,64.62,1,3.54,False,v2 weak-up 0.786 retrace
+2017-08-07,up,65.24,1,high,66.15,1,1.38,False,v2 range mid+0.272
+2017-08-11,down,64.95,1,high,67.38,3,3.61,False,v2 weak-down 0.786 retrace
+2017-08-16,down,64.84,3,low,65.2,3,0.55,True,v2 weak-down 0.786 retrace
+2017-08-21,up,66.72,1,low,65.52,6,1.83,False,v2 range mid+0.272
+2017-08-24,up,66.91,1,low,65.52,3,2.12,False,v2 weak-up 0.786 retrace
+2017-09-01,up,65.45,2,low,67.36,9,2.84,False,v2 weak-up 0.786 retrace
+2017-09-06,up,67.6,1,low,67.36,7,0.36,False,v2 weak-up 0.786 retrace
+2017-09-20,up,68.0,1,low,66.31,3,2.55,False,v2 weak-up 0.786 retrace
+2017-09-21,up,68.71,1,low,66.31,2,3.62,False,v2 weak-up 0.786 retrace
+2017-09-28,up,68.45,2,low,67.03,4,2.12,False,v2 range mid+0.272
+2017-10-09,up,67.47,2,high,70.81,4,4.72,False,v2 strong-up 1.618 ext
+2017-10-18,up,73.15,4,low,70.94,5,3.12,False,v2 strong-up 1.618 ext
+2017-10-30,up,71.02,9,low,75.37,2,5.77,False,v2 strong-up 1.618 ext
+2017-11-01,up,82.99,12,high,77.2,4,7.5,False,v2 strong-up 1.618 ext
+2017-11-06,up,80.26,5,high,77.2,1,3.96,False,v2 strong-up 1.618 ext
+2017-11-10,up,76.78,1,high,76.49,3,0.38,True,v2 range mid+0.272
+2017-11-14,up,76.79,1,high,76.49,1,0.39,True,v2 range mid+0.272
+2017-11-20,up,76.24,1,high,77.74,5,1.93,False,v2 range mid+0.272
+2017-11-22,down,75.44,1,high,77.74,3,2.96,False,v2 weak-down 0.786 retrace
+2017-12-01,up,77.15,1,low,73.75,1,4.61,False,v2 range mid+0.272
+2017-12-07,up,76.83,2,high,79.97,7,3.93,False,v2 range mid+0.272
+2017-12-21,up,78.55,1,low,79.73,13,1.48,False,v2 range mid+0.272
+2017-12-26,up,79.42,1,low,79.73,11,0.39,False,v2 weak-up 0.786 retrace
+2018-01-17,up,81.16,2,high,87.8,11,7.56,False,v2 strong-up 1.618 ext
+2018-01-19,up,84.99,3,high,87.8,9,3.2,False,v2 strong-up 1.618 ext
+2018-02-06,up,86.77,2,low,76.61,3,13.26,False,v2 weak-up 0.786 retrace
+2018-02-14,up,85.25,1,high,85.85,2,0.7,True,v2 range mid+0.272
+2018-02-22,down,78.59,3,high,88.0,3,10.69,False,v2 weak-down 0.786 retrace
+2018-03-02,up,87.51,1,high,89.29,7,1.99,False,v2 range mid+0.272
+2018-03-07,up,87.02,1,high,89.29,4,2.54,False,v2 weak-up 0.786 retrace
+2018-03-16,up,88.04,1,low,79.96,5,10.11,False,v2 weak-up 0.786 retrace
+2018-03-28,down,82.09,1,low,80.35,2,2.17,False,v2 range mid+0.272
+2018-04-02,down,81.54,1,high,89.13,13,8.52,False,v2 weak-down 0.786 retrace
+2018-04-05,up,85.76,1,high,89.13,10,3.78,False,v2 range mid+0.272
+2018-04-24,up,87.25,1,low,82.9,1,5.25,False,v2 weak-up 0.786 retrace
+2018-04-30,up,87.8,1,low,84.89,3,3.43,False,v2 weak-up 0.786 retrace
+2018-05-02,up,88.39,1,low,84.89,1,4.12,False,v2 weak-up 0.786 retrace
+2018-05-08,up,88.82,1,high,90.62,4,1.99,False,v2 weak-up 0.786 retrace
+2018-05-17,up,89.39,1,high,94.7,14,5.61,False,v2 weak-up 0.786 retrace
+2018-05-22,up,90.14,1,high,94.7,11,4.82,False,v2 weak-up 0.786 retrace
+2018-06-12,up,96.02,2,high,94.09,2,2.05,False,v2 strong-up 1.618 ext
+2018-06-19,up,93.74,1,high,94.54,1,0.85,True,v2 range mid+0.272
+2018-06-21,down,92.2,1,low,89.69,5,2.8,False,v2 weak-down 0.786 retrace
+2018-06-25,down,92.34,1,low,89.69,3,2.95,False,v2 range mid+0.272
+2018-07-03,up,93.43,2,low,95.81,11,2.48,False,v2 range mid+0.272
+2018-07-24,up,99.59,1,high,102.5,1,2.84,False,v2 strong-up 1.618 ext
+2018-07-30,up,101.07,3,high,101.59,8,0.51,True,v2 weak-up 0.786 retrace
+2018-08-02,up,101.24,1,high,101.59,5,0.34,True,v2 weak-up 0.786 retrace
+2018-08-14,up,100.45,1,low,97.93,6,2.57,False,v2 range mid+0.272
+2018-08-27,up,100.76,1,high,104.41,4,3.5,False,v2 range mid+0.272
+2018-09-06,up,103.02,2,low,99.27,1,3.78,False,v2 weak-up 0.786 retrace
+2018-09-12,up,107.59,3,high,105.29,1,2.18,False,v2 strong-up 1.618 ext
+2018-09-18,up,109.01,3,low,102.8,1,6.04,False,v2 strong-up 1.618 ext
+2018-09-19,up,105.29,1,high,106.73,2,1.35,False,v2 range mid+0.272
+2018-09-24,up,104.72,1,low,105.24,4,0.49,False,v2 range mid+0.272
+2018-09-26,up,109.16,2,low,105.24,2,3.72,False,v2 strong-up 1.618 ext
+2018-10-03,up,107.65,1,low,96.46,6,11.6,False,v2 strong-up 1.618 ext
+2018-10-08,up,107.06,3,low,96.46,3,10.99,False,v2 weak-up 0.786 retrace
+2018-10-16,up,105.02,1,high,103.51,1,1.46,False,v2 range mid+0.272
+2018-10-22,down,97.97,2,low,94.05,2,4.17,False,v2 weak-down 0.786 retrace
+2018-10-29,down,96.07,1,low,92.68,1,3.66,False,v2 weak-down 0.786 retrace
+2018-11-02,down,92.97,2,high,103.91,3,10.53,False,v2 weak-down 0.786 retrace
+2018-11-12,down,95.24,1,high,101.23,4,5.92,False,v2 range mid+0.272
+2018-11-21,down,101.8,2,high,105.45,7,3.46,False,v2 weak-down 0.786 retrace
+2018-11-26,down,94.27,2,high,105.45,5,10.6,False,v2 weak-down 0.786 retrace
+2018-12-07,down,95.35,1,low,96.59,1,1.28,False,v2 range mid+0.272
+2018-12-13,up,103.55,1,low,87.36,8,18.53,False,v2 weak-up 0.786 retrace
+2018-12-17,down,98.15,1,low,87.36,6,12.35,False,v2 range mid+0.272
+2018-12-31,down,90.8,1,low,90.37,2,0.48,True,v2 weak-down 0.786 retrace
+2019-01-03,down,89.04,1,high,97.51,4,8.69,False,v2 weak-down 0.786 retrace
+2019-01-08,down,91.48,1,high,97.51,1,6.18,False,v2 range mid+0.272
+2019-01-14,up,95.98,1,high,100.32,4,4.33,False,v2 weak-up 0.786 retrace
+2019-01-17,up,96.79,1,high,100.32,1,3.52,False,v2 weak-up 0.786 retrace
+2019-01-24,up,99.0,1,high,100.3,1,1.3,False,v2 weak-up 0.786 retrace
+2019-01-30,up,100.32,1,high,99.73,4,0.59,True,v2 range mid+0.272
+2019-02-01,down,96.2,1,high,99.73,2,3.54,False,v2 range mid+0.272
+2019-02-08,up,98.65,1,high,105.73,11,6.7,False,v2 range mid+0.272
+2019-02-13,up,99.09,1,high,105.73,8,6.28,False,v2 range mid+0.272
+2019-03-01,up,111.16,4,high,105.74,1,5.13,False,v2 strong-up 1.618 ext
+2019-03-07,up,105.74,2,low,101.59,1,4.09,False,v2 weak-up 0.786 retrace
+2019-03-13,up,108.3,1,high,112.81,6,4.0,False,v2 strong-up 1.618 ext
+2019-03-26,up,119.74,6,low,107.86,1,11.01,False,v2 strong-up 1.618 ext
+2019-04-01,up,115.87,3,high,112.45,2,3.04,False,v2 strong-up 1.618 ext
+2019-04-08,up,111.4,1,high,122.66,12,9.18,False,v2 range mid+0.272
+2019-04-30,up,128.97,6,high,119.45,8,7.97,False,v2 strong-up 1.618 ext
+2019-05-15,up,121.93,2,high,122.26,2,0.27,True,v2 range mid+0.272
+2019-05-16,up,118.41,1,high,122.26,1,3.15,False,v2 range mid+0.272
+2019-05-22,up,120.68,1,low,111.53,7,8.2,False,v2 weak-up 0.786 retrace
+2019-06-06,up,119.81,1,high,125.81,3,4.77,False,v2 range mid+0.272
+2019-06-14,up,122.55,1,high,129.71,6,5.52,False,v2 range mid+0.272
+2019-06-27,up,128.82,2,high,129.09,4,0.21,True,v2 range mid+0.272
+2019-06-28,up,128.57,2,high,129.09,3,0.4,True,v2 weak-up 0.786 retrace
+2019-07-09,up,128.02,1,high,130.77,4,2.1,False,v2 range mid+0.272
+2019-07-18,up,130.41,2,high,132.78,6,1.78,False,v2 weak-up 0.786 retrace
+2019-07-23,up,133.59,2,high,132.78,3,0.61,True,v2 strong-up 1.618 ext
+2019-07-31,up,131.37,2,low,122.56,3,7.19,False,v2 weak-up 0.786 retrace
+2019-08-08,up,130.45,1,high,130.62,1,0.13,True,v2 range mid+0.272
+2019-08-14,down,124.28,1,low,124.35,1,0.06,True,v2 weak-down 0.786 retrace
+2019-08-20,up,129.19,1,high,131.16,1,1.5,False,v2 range mid+0.272
+2019-08-26,up,129.7,1,high,132.0,7,1.74,False,v2 weak-up 0.786 retrace
+2019-08-28,up,129.81,1,high,132.0,5,1.66,False,v2 weak-up 0.786 retrace
+2019-09-10,up,130.47,1,high,133.87,7,2.54,False,v2 weak-up 0.786 retrace
+2019-09-13,up,130.82,1,high,133.87,4,2.28,False,v2 weak-up 0.786 retrace
+2019-09-24,up,132.29,2,low,127.91,1,3.42,False,v2 weak-up 0.786 retrace
+2019-09-30,up,132.59,1,low,125.27,3,5.84,False,v2 weak-up 0.786 retrace
+2019-10-08,down,125.87,1,high,133.32,5,5.59,False,v2 range mid+0.272
+2019-10-18,down,126.99,1,low,127.51,3,0.41,True,v2 weak-down 0.786 retrace
+2019-10-28,up,132.0,2,high,143.88,22,8.26,False,v2 range mid+0.272
+2019-10-31,up,134.95,1,high,143.88,19,6.21,False,v2 weak-up 0.786 retrace
+2019-12-03,up,148.15,5,high,147.09,9,0.72,True,v2 strong-up 1.618 ext
+2019-12-06,up,147.29,3,high,147.09,6,0.14,True,v2 strong-up 1.618 ext
+2019-12-19,up,152.49,5,low,147.61,7,3.31,False,v2 strong-up 1.618 ext
+2019-12-24,up,148.34,1,low,147.61,4,0.49,False,v2 strong-up 1.618 ext
+2020-01-06,up,149.19,1,high,158.69,10,5.99,False,v2 strong-up 1.618 ext
+2020-01-07,up,154.15,4,high,158.69,9,2.86,False,v2 strong-up 1.618 ext
+2020-01-24,up,163.04,4,low,151.15,1,7.87,False,v2 strong-up 1.618 ext
+2020-01-30,up,163.35,1,high,179.92,8,9.21,False,v2 strong-up 1.618 ext
+2020-02-14,up,197.7,8,high,178.03,2,11.05,False,v2 strong-up 1.618 ext
+2020-02-18,up,185.08,3,high,178.03,1,3.96,False,v2 strong-up 1.618 ext
+2020-02-24,down,173.04,3,low,143.8,4,20.33,False,v2 range mid+0.272
+2020-03-04,down,151.13,2,high,153.18,7,1.34,False,v2 weak-down 0.786 retrace
+2020-03-06,down,148.46,1,high,153.18,5,3.08,False,v2 weak-down 0.786 retrace
+2020-03-18,down,155.83,3,high,142.05,1,9.7,False,v2 weak-down 0.786 retrace
+2020-03-19,down,133.17,1,low,125.37,2,6.22,False,v2 weak-down 0.786 retrace
+2020-03-20,down,127.72,1,low,125.37,1,1.87,False,v2 range mid+0.272
+2020-03-24,down,130.99,1,high,155.89,5,15.97,False,v2 range mid+0.272
+2020-03-26,down,128.94,2,high,155.89,3,17.29,False,v2 weak-down 0.786 retrace
+2020-04-03,down,132.33,2,high,160.83,2,17.72,False,v2 range mid+0.272
+2020-04-13,up,159.7,1,high,170.29,4,6.22,False,v2 range mid+0.272
+2020-04-16,up,159.27,1,high,170.29,1,6.47,False,v2 weak-up 0.786 retrace
+2020-04-22,up,166.71,1,low,160.26,4,4.02,False,v2 weak-up 0.786 retrace
+2020-04-24,up,167.48,1,low,160.26,2,4.51,False,v2 weak-up 0.786 retrace
+2020-05-01,up,159.59,1,high,177.4,6,10.04,False,v2 weak-up 0.786 retrace
+2020-05-14,up,173.73,1,high,176.97,1,1.83,False,v2 weak-up 0.786 retrace
+2020-05-19,up,175.01,1,high,177.1,2,1.18,False,v2 weak-up 0.786 retrace
+2020-05-20,up,174.52,1,high,177.1,1,1.46,False,v2 range mid+0.272
+2020-05-27,up,177.07,1,high,188.34,10,5.98,False,v2 weak-up 0.786 retrace
+2020-06-01,up,175.05,1,high,188.34,7,7.06,False,v2 weak-up 0.786 retrace
+2020-06-15,up,183.89,1,high,193.49,6,4.96,False,v2 weak-up 0.786 retrace
+2020-06-18,up,196.85,3,high,193.49,3,1.74,False,v2 strong-up 1.618 ext
+2020-06-26,up,189.44,1,low,183.62,1,3.17,False,v2 weak-up 0.786 retrace
+2020-07-02,up,199.59,1,high,205.28,4,2.77,False,v2 strong-up 1.618 ext
+2020-07-14,up,218.67,5,low,191.06,3,14.45,False,v2 strong-up 1.618 ext
+2020-07-22,up,214.07,3,low,187.38,2,14.24,False,v2 strong-up 1.618 ext
+2020-07-24,up,200.25,2,low,188.8,5,6.06,False,v2 range mid+0.272
+2020-07-29,down,190.72,1,low,188.8,2,1.02,False,v2 weak-down 0.786 retrace
+2020-08-05,up,188.48,3,low,192.72,4,2.2,False,v2 range mid+0.272
+2020-08-06,up,217.41,3,low,192.72,3,12.81,False,v2 strong-up 1.618 ext
+2020-08-14,up,203.54,1,high,219.82,9,7.41,False,v2 weak-up 0.786 retrace
+2020-09-01,up,236.57,6,high,221.45,1,6.83,False,v2 strong-up 1.618 ext
+2020-09-08,up,221.1,7,low,191.38,3,15.53,False,v2 weak-up 0.786 retrace
+2020-09-16,down,198.24,1,low,186.63,2,6.22,False,v2 range mid+0.272
+2020-09-21,down,193.3,1,high,203.5,8,5.01,False,v2 weak-down 0.786 retrace
+2020-09-23,down,189.56,1,high,203.5,6,6.85,False,v2 weak-down 0.786 retrace
+2020-10-06,down,190.48,1,high,214.17,5,11.06,False,v2 range mid+0.272
+2020-10-09,up,201.63,1,high,214.17,2,5.86,False,v2 weak-up 0.786 retrace
+2020-10-16,up,210.02,1,low,189.84,10,10.63,False,v2 weak-up 0.786 retrace
+2020-11-04,up,208.62,1,high,216.94,3,3.84,False,v2 range mid+0.272
+2020-11-12,up,210.76,1,low,198.48,7,6.19,False,v2 range mid+0.272
+2020-11-13,up,213.19,2,low,198.48,6,7.41,False,v2 weak-up 0.786 retrace
+2020-11-27,up,199.22,1,high,207.21,2,3.86,False,v2 range mid+0.272
+2020-12-04,down,200.35,1,high,206.86,2,3.15,False,v2 weak-down 0.786 retrace
+2020-12-11,down,206.93,1,high,216.61,11,4.47,False,v2 weak-down 0.786 retrace
+2020-12-16,up,205.15,1,high,216.61,8,5.29,False,v2 range mid+0.272
+2021-01-04,up,212.92,2,low,202.08,2,5.36,False,v2 weak-up 0.786 retrace
+2021-01-11,up,213.5,2,low,202.17,4,5.6,False,v2 weak-up 0.786 retrace
+2021-01-13,down,203.96,1,low,202.17,2,0.89,True,v2 range mid+0.272
+2021-01-21,up,208.46,2,high,231.35,5,9.89,False,v2 range mid+0.272
+2021-02-02,up,249.38,5,high,233.69,1,6.71,False,v2 strong-up 1.618 ext
+2021-02-08,up,235.14,1,high,234.68,5,0.2,True,v2 strong-up 1.618 ext
+2021-02-19,up,235.29,1,low,217.78,4,8.04,False,v2 strong-up 1.618 ext
+2021-03-02,up,231.06,2,low,214.32,2,7.81,False,v2 weak-up 0.786 retrace
+2021-03-04,down,219.87,1,high,229.42,8,4.16,False,v2 range mid+0.272
+2021-03-09,down,217.02,1,high,229.42,5,5.4,False,v2 weak-down 0.786 retrace
+2021-03-19,down,217.76,1,high,230.37,2,5.47,False,v2 range mid+0.272
+2021-03-24,up,227.23,1,low,220.86,4,2.88,False,v2 weak-up 0.786 retrace
+2021-03-26,up,227.98,1,low,220.86,2,3.22,False,v2 weak-up 0.786 retrace
+2021-04-05,up,236.25,1,low,244.31,13,3.3,False,v2 strong-up 1.618 ext
+2021-04-27,up,258.8,3,high,243.03,8,6.49,False,v2 strong-up 1.618 ext
+2021-04-30,up,249.98,3,high,243.03,5,2.86,False,v2 weak-up 0.786 retrace
+2021-05-12,down,244.97,5,high,238.14,2,2.87,False,v2 range mid+0.272
+2021-05-17,down,230.84,1,low,228.55,2,1.0,False,v2 weak-down 0.786 retrace
+2021-05-19,down,229.79,1,high,242.29,5,5.16,False,v2 weak-down 0.786 retrace
+2021-05-24,up,235.95,1,high,242.29,2,2.62,False,v2 range mid+0.272
+2021-06-01,up,239.35,1,low,232.77,2,2.83,False,v2 weak-up 0.786 retrace
+2021-06-08,up,240.25,1,low,243.71,6,1.42,False,v2 weak-up 0.786 retrace
+2021-06-21,up,250.47,1,high,268.87,11,6.84,False,v2 strong-up 1.618 ext
+2021-07-12,up,284.42,6,high,272.14,4,4.51,False,v2 strong-up 1.618 ext
+2021-07-21,up,274.16,1,low,271.04,4,1.15,False,v2 strong-up 1.618 ext
+2021-07-22,up,277.86,1,low,271.04,3,2.52,False,v2 strong-up 1.618 ext
+2021-07-30,up,276.08,1,low,271.79,1,1.58,False,v2 strong-up 1.618 ext
+2021-08-02,up,282.19,3,high,279.27,5,1.05,False,v2 strong-up 1.618 ext
+2021-08-05,up,281.72,1,high,279.27,2,0.88,True,v2 strong-up 1.618 ext
+2021-08-12,up,283.89,2,low,277.02,5,2.48,False,v2 strong-up 1.618 ext
+2021-08-13,up,283.03,1,low,277.02,4,2.17,False,v2 strong-up 1.618 ext
+2021-08-24,up,279.39,3,low,284.88,3,1.93,False,v2 strong-up 1.618 ext
+2021-08-25,up,303.72,4,low,284.88,2,6.61,False,v2 strong-up 1.618 ext
+2021-09-01,up,298.86,3,low,282.24,7,5.89,False,v2 strong-up 1.618 ext
+2021-09-07,up,291.07,1,low,282.24,4,3.13,False,v2 range mid+0.272
+2021-09-16,down,284.52,2,low,277.86,2,2.4,False,v2 weak-down 0.786 retrace
+2021-09-20,up,290.56,2,high,288.78,3,0.62,True,v2 range mid+0.272
+2021-09-23,up,289.56,1,low,268.96,7,7.66,False,v2 range mid+0.272
+2021-09-28,down,280.2,2,low,268.96,4,4.18,False,v2 weak-down 0.786 retrace
+2021-10-07,down,273.2,2,low,280.58,3,2.63,False,v2 weak-down 0.786 retrace
+2021-10-15,up,277.93,3,high,325.15,15,14.52,False,v2 range mid+0.272
+2021-11-10,up,352.69,9,high,336.2,8,4.9,False,v2 strong-up 1.618 ext
+2021-11-15,up,330.42,2,high,336.2,5,1.72,False,v2 strong-up 1.618 ext
+2021-11-26,up,332.01,4,high,326.21,3,1.78,False,v2 weak-up 0.786 retrace
+2021-12-01,up,331.48,3,low,305.78,2,8.4,False,v2 range mid+0.272
+2021-12-06,down,317.78,1,high,330.55,5,3.86,False,v2 weak-down 0.786 retrace
+2021-12-08,down,310.15,2,high,330.55,3,6.17,False,v2 weak-down 0.786 retrace
+2021-12-16,down,311.43,1,low,305.03,1,2.1,False,v2 range mid+0.272
+2021-12-22,up,324.73,1,high,331.04,4,1.91,False,v2 range mid+0.272
+2022-01-03,up,325.11,1,high,310.95,7,4.55,False,v2 range mid+0.272
+2022-01-18,down,298.53,1,low,265.42,4,12.47,False,v2 strong-down 1.618 ext
+2022-01-27,down,275.16,2,high,302.98,4,9.18,False,v2 weak-down 0.786 retrace
+2022-02-07,down,273.46,2,high,299.92,2,8.82,False,v2 weak-down 0.786 retrace
+2022-02-10,down,291.69,1,low,261.6,9,11.5,False,v2 range mid+0.272
+2022-02-14,down,290.99,1,low,261.6,7,11.23,False,v2 range mid+0.272
+2022-03-01,down,269.8,2,high,292.06,2,7.62,False,v2 weak-down 0.786 retrace
+2022-03-08,down,242.78,3,low,265.74,4,8.64,False,v2 strong-down 1.618 ext
+2022-03-11,down,266.97,1,low,265.74,1,0.46,True,v2 weak-down 0.786 retrace
+2022-03-17,down,261.42,3,high,304.41,9,14.12,False,v2 range mid+0.272
+2022-04-04,up,296.13,1,low,268.17,9,10.43,False,v2 weak-up 0.786 retrace
+2022-04-21,up,296.65,4,low,260.14,3,14.03,False,v2 weak-up 0.786 retrace
+2022-04-26,down,271.46,2,high,280.35,2,3.17,False,v2 range mid+0.272
+2022-04-29,down,264.94,1,high,280.25,3,5.46,False,v2 weak-down 0.786 retrace
+2022-05-03,down,264.46,1,high,280.25,1,5.63,False,v2 weak-down 0.786 retrace
+2022-05-09,down,280.27,3,low,240.89,3,16.35,False,v2 weak-down 0.786 retrace
+2022-05-17,down,249.31,1,low,237.99,3,4.76,False,v2 weak-down 0.786 retrace
+2022-05-20,down,229.99,1,high,268.17,7,14.24,False,v2 strong-down 1.618 ext
+2022-05-25,down,242.39,1,high,268.17,4,9.61,False,v2 weak-down 0.786 retrace
+2022-06-06,down,244.87,2,low,233.23,6,4.99,False,v2 range mid+0.272
+2022-06-07,up,264.84,1,low,233.23,5,13.55,False,v2 weak-up 0.786 retrace
+2022-06-17,down,237.65,1,high,259.1,5,8.28,False,v2 range mid+0.272
+2022-06-30,down,238.77,1,high,259.84,4,8.11,False,v2 weak-down 0.786 retrace
+2022-07-06,up,255.71,1,high,259.84,1,1.59,False,v2 range mid+0.272
+2022-07-12,up,256.5,2,low,237.51,2,8.0,False,v2 weak-up 0.786 retrace
+2022-07-19,down,242.6,1,low,241.01,5,0.66,True,v2 range mid+0.272
+2022-07-29,up,240.26,5,low,268.09,7,10.38,False,v2 weak-up 0.786 retrace
+2022-08-12,up,284.83,1,high,284.09,1,0.26,True,v2 strong-up 1.618 ext
+2022-08-18,up,293.98,3,high,271.3,6,8.36,False,v2 strong-up 1.618 ext
+2022-08-31,down,274.22,5,low,243.82,3,12.47,False,v2 range mid+0.272
+2022-09-09,down,249.7,1,high,258.83,1,3.53,False,v2 weak-down 0.786 retrace
+2022-09-15,down,234.54,1,high,239.68,4,2.14,False,v2 strong-down 1.618 ext
+2022-09-26,down,227.85,1,high,234.52,2,2.84,False,v2 strong-down 1.618 ext
+2022-10-03,down,235.62,1,high,242.5,2,2.84,False,v2 weak-down 0.786 retrace
+2022-10-05,down,227.22,2,low,212.07,6,7.14,False,v2 weak-down 0.786 retrace
+2022-10-10,down,229.17,1,low,212.07,3,8.06,False,v2 range mid+0.272
+2022-10-18,down,219.01,2,high,242.95,5,9.85,False,v2 range mid+0.272
+2022-10-21,down,217.21,3,high,242.95,2,10.59,False,v2 weak-down 0.786 retrace
+2022-10-28,down,237.64,1,low,206.55,5,15.05,False,v2 range mid+0.272
+2022-11-01,up,237.72,2,low,206.55,3,15.09,False,v2 weak-up 0.786 retrace
+2022-11-09,down,209.27,1,high,240.0,2,12.8,False,v2 range mid+0.272
+2022-11-16,down,213.71,3,low,230.62,1,7.33,False,v2 weak-down 0.786 retrace
+2022-11-22,up,237.86,1,low,231.18,4,2.89,False,v2 range mid+0.272
+2022-12-02,up,231.05,3,low,235.06,3,1.71,False,v2 range mid+0.272
+2022-12-06,up,244.84,1,low,235.06,1,4.16,False,v2 weak-up 0.786 retrace
+2022-12-12,up,245.67,1,high,256.13,1,4.08,False,v2 weak-up 0.786 retrace
+2022-12-16,up,251.62,3,low,226.97,4,10.86,False,v2 weak-up 0.786 retrace
+2022-12-28,down,233.62,1,high,238.5,3,2.05,False,v2 range mid+0.272
+2023-01-06,down,229.44,2,low,223.87,8,2.49,False,v2 weak-down 0.786 retrace
+2023-01-11,down,218.36,2,low,223.87,5,2.46,False,v2 weak-down 0.786 retrace
+2023-01-24,up,221.36,3,low,224.09,1,1.22,False,v2 range mid+0.272
+2023-01-30,up,224.04,2,high,268.59,7,16.59,False,v2 range mid+0.272
+2023-02-13,up,296.09,5,high,266.86,1,10.95,False,v2 strong-up 1.618 ext
+2023-02-17,up,268.2,3,low,238.96,8,12.24,False,v2 range mid+0.272
+2023-03-07,up,260.5,3,low,239.08,4,8.96,False,v2 range mid+0.272
+2023-03-09,up,249.86,1,low,239.08,2,4.51,False,v2 range mid+0.272
+2023-03-16,up,249.89,4,high,275.66,1,9.35,False,v2 range mid+0.272
+2023-03-22,up,267.83,1,low,264.68,4,1.19,False,v2 weak-up 0.786 retrace
+2023-03-31,up,282.45,1,high,284.17,4,0.61,True,v2 strong-up 1.618 ext
+2023-04-12,up,280.0,1,high,283.86,4,1.36,False,v2 weak-up 0.786 retrace
+2023-04-14,up,282.0,1,high,283.86,2,0.66,True,v2 weak-up 0.786 retrace
+2023-04-21,up,281.61,1,low,267.91,2,5.11,False,v2 range mid+0.272
+2023-04-28,down,271.32,6,low,295.18,4,8.08,False,v2 weak-down 0.786 retrace
+2023-05-09,up,288.96,2,high,304.52,1,5.11,False,v2 range mid+0.272
+2023-05-15,up,310.29,2,low,304.81,7,1.8,False,v2 strong-up 1.618 ext
+2023-05-30,up,304.99,4,high,330.11,4,7.61,False,v2 strong-up 1.618 ext
+2023-06-08,up,345.75,6,high,342.7,6,0.89,True,v2 strong-up 1.618 ext
+2023-06-12,up,339.79,3,high,342.7,4,0.85,True,v2 strong-up 1.618 ext
+2023-06-22,up,360.16,5,low,320.29,2,12.45,False,v2 strong-up 1.618 ext
+2023-06-29,up,337.9,2,high,334.43,4,1.04,False,v2 weak-up 0.786 retrace
+2023-07-11,up,331.21,1,high,357.63,5,7.39,False,v2 range mid+0.272
+2023-07-14,down,322.18,2,high,357.63,2,9.91,False,v2 weak-down 0.786 retrace
+2023-07-21,up,348.79,2,low,320.84,4,8.71,False,v2 range mid+0.272
+2023-08-01,up,349.76,3,low,311.25,8,12.37,False,v2 weak-up 0.786 retrace
+2023-08-16,down,313.44,1,low,304.42,2,2.96,False,v2 range mid+0.272
+2023-08-21,down,312.48,1,high,325.36,3,3.96,False,v2 weak-down 0.786 retrace
+2023-08-23,down,307.11,2,high,325.36,1,5.61,False,v2 weak-down 0.786 retrace
+2023-08-29,up,320.59,1,high,333.06,11,3.74,False,v2 range mid+0.272
+2023-08-30,up,322.39,1,high,333.06,10,3.2,False,v2 weak-up 0.786 retrace
+2023-09-19,up,328.45,1,low,302.37,7,8.63,False,v2 weak-up 0.786 retrace
+2023-10-03,down,309.37,1,low,318.89,8,2.99,False,v2 range mid+0.272
+2023-10-05,down,304.97,1,low,318.89,6,4.37,False,v2 weak-down 0.786 retrace
+2023-10-18,up,317.89,1,high,329.17,1,3.43,False,v2 range mid+0.272
+2023-10-24,up,326.97,1,high,338.28,1,3.34,False,v2 weak-up 0.786 retrace
+2023-10-26,up,326.39,1,high,376.27,23,13.26,False,v2 range mid+0.272
+2023-10-30,up,333.42,1,high,376.27,21,11.39,False,v2 range mid+0.272
+2023-12-04,up,367.61,1,high,369.75,7,0.58,True,v2 range mid+0.272
+2023-12-07,up,371.78,2,high,369.75,4,0.55,True,v2 weak-up 0.786 retrace
+2023-12-18,up,366.46,1,high,369.28,8,0.76,True,v2 range mid+0.272
+2023-12-19,up,366.73,1,high,369.28,7,0.69,True,v2 range mid+0.272
+2024-01-04,up,366.37,1,low,358.84,1,2.1,False,v2 range mid+0.272
+2024-01-10,up,366.9,2,high,406.64,14,9.77,False,v2 range mid+0.272
+2024-02-05,up,417.6,4,high,412.02,4,1.35,False,v2 strong-up 1.618 ext
+2024-02-14,up,407.07,1,low,389.64,4,4.47,False,v2 weak-up 0.786 retrace
+2024-02-16,up,408.37,2,low,389.64,2,4.81,False,v2 weak-up 0.786 retrace
+2024-02-26,up,393.75,1,low,396.14,1,0.6,False,v2 range mid+0.272
+2024-02-28,down,393.55,1,high,409.38,3,3.87,False,v2 weak-down 0.786 retrace
+2024-03-01,up,405.23,1,high,409.38,1,1.01,False,v2 range mid+0.272
+2024-03-07,up,406.55,1,high,419.65,5,3.12,False,v2 weak-up 0.786 retrace
+2024-03-11,up,405.14,2,high,419.65,3,3.46,False,v2 range mid+0.272
+2024-03-19,up,413.07,1,high,422.59,2,2.25,False,v2 range mid+0.272
+2024-03-26,up,421.92,1,high,420.49,6,0.34,True,v2 range mid+0.272
+2024-04-09,up,418.01,1,high,421.17,2,0.75,True,v2 range mid+0.272
+2024-04-16,up,418.69,2,low,380.62,7,10.0,False,v2 weak-up 0.786 retrace
+2024-04-30,down,389.87,1,high,426.09,17,8.5,False,v2 range mid+0.272
+2024-05-01,down,385.86,1,high,426.09,16,9.44,False,v2 weak-down 0.786 retrace
+2024-05-29,up,421.31,1,low,397.5,2,5.99,False,v2 range mid+0.272
+2024-06-05,up,419.97,1,high,443.13,8,5.23,False,v2 weak-up 0.786 retrace
+2024-06-21,up,471.33,5,low,437.94,6,7.62,False,v2 strong-up 1.618 ext
+2024-07-05,up,446.34,3,high,440.62,12,1.3,False,v2 strong-up 1.618 ext
+2024-07-10,up,474.02,3,high,440.62,9,7.58,False,v2 strong-up 1.618 ext
+2024-07-26,down,445.09,3,low,378.9,6,17.47,False,v2 range mid+0.272
+2024-08-08,down,340.76,6,high,420.15,10,18.9,False,v2 strong-down 1.618 ext
+2024-08-27,down,387.73,3,high,415.49,2,6.68,False,v2 weak-down 0.786 retrace
+2024-09-04,down,416.49,3,low,394.57,2,5.56,False,v2 weak-down 0.786 retrace
+2024-09-11,up,410.72,1,high,434.98,4,5.58,False,v2 range mid+0.272
+2024-09-20,up,426.33,1,low,419.47,2,1.64,False,v2 weak-up 0.786 retrace
+2024-09-27,up,431.66,2,low,401.82,7,7.43,False,v2 weak-up 0.786 retrace
+2024-10-11,down,405.84,1,high,417.45,1,2.78,False,v2 range mid+0.272
+2024-10-17,down,405.16,1,high,431.68,9,6.14,False,v2 weak-down 0.786 retrace
+2024-10-21,down,407.14,1,high,431.68,7,5.68,False,v2 range mid+0.272
+2024-11-04,up,425.78,4,high,420.21,3,1.33,False,v2 weak-up 0.786 retrace
+2024-11-07,up,424.29,1,high,422.65,4,0.39,True,v2 range mid+0.272
+2024-11-12,down,403.74,2,high,422.65,1,4.47,False,v2 weak-down 0.786 retrace
+2024-11-18,down,420.77,2,low,404.19,2,4.1,False,v2 range mid+0.272
+2024-11-25,up,418.7,1,high,449.96,12,6.95,False,v2 weak-up 0.786 retrace
+2024-12-17,up,478.25,4,low,422.81,3,13.11,False,v2 strong-up 1.618 ext
+2024-12-26,up,444.15,2,low,409.22,4,8.54,False,v2 weak-up 0.786 retrace
+2025-01-07,down,412.32,1,low,405.14,4,1.77,False,v2 range mid+0.272
+2025-01-10,down,413.33,1,low,405.14,2,2.02,False,v2 weak-down 0.786 retrace
+2025-01-17,down,410.12,2,high,441.2,2,7.04,False,v2 weak-down 0.786 retrace
+2025-01-27,up,432.98,1,high,442.29,1,2.1,False,v2 range mid+0.272
+2025-01-31,down,441.45,4,low,403.11,1,9.51,False,v2 range mid+0.272
+2025-02-06,down,412.04,1,high,412.96,1,0.22,False,v2 range mid+0.272
+2025-02-12,down,405.22,1,high,414.44,5,2.22,False,v2 weak-down 0.786 retrace
+2025-02-18,down,401.89,1,high,414.44,2,3.03,False,v2 weak-down 0.786 retrace
+2025-02-25,down,402.43,2,low,376.58,5,6.86,False,v2 range mid+0.272
+2025-03-07,down,385.21,1,low,372.54,2,3.4,False,v2 range mid+0.272
+2025-03-11,down,363.66,1,high,388.15,4,6.31,False,v2 strong-down 1.618 ext
+2025-03-14,down,377.88,1,high,388.15,1,2.65,False,v2 weak-down 0.786 retrace
+2025-03-20,down,375.88,1,high,391.76,3,4.05,False,v2 weak-down 0.786 retrace
+2025-03-28,down,388.97,2,low,362.98,1,7.16,False,v2 range mid+0.272
+2025-04-03,down,369.54,1,low,340.79,2,8.44,False,v2 range mid+0.272
+2025-04-10,down,345.85,4,high,390.07,2,11.34,False,v2 range mid+0.272
+2025-04-17,down,351.34,1,low,351.54,1,0.06,True,v2 weak-down 0.786 retrace
+2025-04-24,up,381.29,1,low,379.98,4,0.34,False,v2 range mid+0.272
+2025-05-05,up,373.5,6,low,444.52,14,15.98,False,v2 range mid+0.272
+2025-05-29,up,429.8,4,low,467.88,16,8.14,False,v2 range mid+0.272
+2025-06-02,up,466.31,2,low,467.88,14,0.34,False,v2 strong-up 1.618 ext
+2025-06-26,up,465.63,5,high,495.86,2,6.1,False,v2 range mid+0.272
+2025-07-03,up,513.15,3,high,501.82,3,2.26,False,v2 strong-up 1.618 ext
+2025-07-08,up,503.24,2,high,501.82,1,0.28,True,v2 strong-up 1.618 ext
+2025-07-14,up,512.88,2,high,509.6,4,0.64,True,v2 strong-up 1.618 ext
+2025-07-23,up,514.41,2,high,513.22,2,0.23,True,v2 strong-up 1.618 ext
+2025-07-28,up,518.13,2,low,504.45,2,2.71,False,v2 strong-up 1.618 ext
+2025-07-30,up,523.99,3,high,550.01,1,4.73,False,v2 strong-up 1.618 ext
+2025-08-04,up,518.64,2,low,512.48,3,1.2,False,v2 strong-up 1.618 ext
+2025-08-05,up,578.17,8,low,512.48,2,12.82,False,v2 strong-up 1.618 ext
+2025-08-12,up,573.2,7,high,527.49,1,8.67,False,v2 strong-up 1.618 ext
+2025-08-18,up,524.07,2,low,494.44,6,5.99,False,v2 range mid+0.272
+2025-08-29,down,501.51,1,high,507.79,4,1.24,False,v2 weak-down 0.786 retrace
+2025-09-03,down,497.11,1,high,507.79,2,2.1,False,v2 weak-down 0.786 retrace
+2025-09-10,down,492.78,1,high,515.06,7,4.33,False,v2 range mid+0.272
+2025-09-24,up,508.97,1,low,500.92,1,1.61,False,v2 range mid+0.272
+2025-09-30,up,512.03,1,high,526.7,4,2.79,False,v2 weak-up 0.786 retrace
+2025-10-09,up,521.18,1,low,501.87,3,3.85,False,v2 weak-up 0.786 retrace
+2025-10-17,up,521.39,2,high,549.2,7,5.06,False,v2 weak-up 0.786 retrace
+2025-10-31,up,539.07,3,low,489.22,5,10.19,False,v2 weak-up 0.786 retrace
+2025-11-12,down,502.9,1,high,509.31,1,1.26,False,v2 range mid+0.272
+2025-11-18,down,493.52,1,low,461.96,5,6.83,False,v2 weak-down 0.786 retrace
+2025-12-01,down,472.09,1,high,490.39,1,3.73,False,v2 weak-down 0.786 retrace
+2025-12-05,down,468.04,1,high,489.2,1,4.33,False,v2 weak-down 0.786 retrace
+2025-12-08,down,476.35,1,low,467.91,6,1.8,False,v2 range mid+0.272
+2025-12-11,down,476.08,1,low,467.91,3,1.75,False,v2 range mid+0.272
+2025-12-19,down,472.47,1,high,486.59,6,2.9,False,v2 weak-down 0.786 retrace
+2025-12-23,down,471.89,2,high,486.59,4,3.02,False,v2 weak-down 0.786 retrace
+2026-01-05,down,486.53,3,high,486.61,2,0.02,False,v2 range mid+0.272
+2026-01-08,down,471.11,1,low,435.91,8,8.08,False,v2 range mid+0.272
+2026-01-12,down,471.12,1,low,435.91,6,8.08,False,v2 range mid+0.272
+2026-01-26,down,447.47,3,high,480.69,2,6.91,False,v2 range mid+0.272
+2026-02-02,down,408.24,1,low,389.85,3,4.72,False,v2 strong-down 1.618 ext
+2026-02-10,down,333.71,7,low,392.04,4,14.88,False,v2 strong-down 1.618 ext
+2026-02-13,down,370.59,3,low,392.04,1,5.47,False,v2 strong-down 1.618 ext
+2026-02-20,down,398.65,1,low,380.17,2,4.86,False,v2 range mid+0.272
+2026-02-27,down,372.83,2,high,411.38,5,9.37,False,v2 strong-down 1.618 ext
+2026-03-03,down,385.67,2,high,411.38,3,6.25,False,v2 weak-down 0.786 retrace
+2026-03-11,down,407.11,1,low,354.84,13,14.73,False,v2 range mid+0.272
+2026-04-02,down,367.73,1,high,383.45,3,4.1,False,v2 range mid+0.272
+2026-04-07,down,343.94,4,high,383.45,1,10.3,False,v2 strong-down 1.618 ext
+2026-04-13,down,374.98,1,high,431.95,7,13.19,False,v2 range mid+0.272
+2026-04-27,up,420.89,1,high,428.18,1,1.7,False,v2 range mid+0.272
+2026-04-28,up,445.67,2,low,396.4,2,12.43,False,v2 strong-up 1.618 ext
+2026-05-01,up,423.98,1,low,403.47,3,5.08,False,v2 range mid+0.272
+2026-05-05,down,403.2,1,low,403.47,1,0.07,True,v2 weak-down 0.786 retrace
+2026-05-11,up,401.86,1,low,399.26,3,0.65,False,v2 range mid+0.272
+2026-05-12,up,421.06,2,low,399.26,2,5.46,False,v2 range mid+0.272
+2026-05-19,down,405.04,1,low,409.64,1,1.12,False,v2 weak-down 0.786 retrace
+2026-05-22,up,423.72,1,low,408.81,2,3.65,False,v2 range mid+0.272
+2026-05-26,up,426.39,1,low,408.81,1,4.3,False,v2 weak-up 0.786 retrace
+2026-06-01,up,409.45,5,low,348.54,17,17.48,False,v2 range mid+0.272
+2026-06-04,up,452.53,3,low,348.54,14,29.84,False,v2 range mid+0.272
+2026-06-30,down,375.19,1,high,394.83,4,4.97,False,v2 range mid+0.272
+2026-07-10,down,358.45,3,high,405.23,4,11.54,False,v2 weak-down 0.786 retrace
+2026-07-14,down,377.71,1,high,405.23,2,6.79,False,v2 range mid+0.272
+2026-07-21,up,398.26,1,low,376.68,2,5.73,False,v2 weak-up 0.786 retrace
+2026-07-28,up,399.12,1,high,512.76,9,22.16,False,v2 weak-up 0.786 retrace
+2026-08-13,up,596.86,8,low,476.25,3,25.32,False,v2 strong-up 1.618 ext
+2026-08-21,up,535.32,5,high,517.78,5,3.39,False,v2 strong-up 1.618 ext
+2026-09-02,up,543.45,5,high,515.65,1,5.39,False,v2 strong-up 1.618 ext

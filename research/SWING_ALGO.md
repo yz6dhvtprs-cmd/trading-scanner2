@@ -1,3 +1,16 @@
+> **CORRECTION 2026-09-11 — sections 3 and 6 are RETRACTED.**
+> The v1-v4 scoreboard below has no null model behind it. Rescored against
+> information-free baselines on AAPL's own 15-year history (682 points), all
+> four versions are significantly WORSE than 4-6 of them at p < 1e-5: v2 hits
+> 10.0% where `close +/- 1.0xATR14` with an alternating direction hits 19.7%.
+> v2's median level error (3.82%) is worse than emitting today's close (2.85%),
+> and its 53.0% direction accuracy is below the 53.3% majority-class rate.
+> The "current best" label is withdrawn. The section-6 range-loop headline is
+> likewise an in-sample best-of-500 that a zero-search constant band matches.
+> No lookahead was found anywhere -- the causality discipline here is sound;
+> the failure was statistical. See `research/RESULTS.md` for the rewrite and
+> `research/baselines.py` for the nulls, now printed on every harness run.
+
 # Swing-prediction algorithm (research track, AAPL-first)
 
 Feed a new stock: `python research/fetch_stock.py --ticker XXX`

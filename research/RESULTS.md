@@ -1,69 +1,172 @@
-# Research results: swing prediction + range loop (AAPL-first, 2026-09-11)
+# Research results — prediction track (rewritten 2026-09-11)
 
-## 1. Swing predictor scoreboard (AAPL, 2y daily, 74 walk-forward points)
+**Headline: the swing predictor never had an edge. v1–v4 are all significantly
+WORSE than forecasters containing zero information, and the earlier "v2 is
+current best" conclusion is retracted.** The cause was not a bug in the
+predictor. It was that no null model was ever computed, so an unremarkable
+number was read as a modest edge.
 
-HIT = right direction AND level within 1%. Fit = first 37, holdout = last 37.
-Every version sees only the prior 50 bars + confirmed swings (zero lookahead).
+Everything below is reproducible offline from `research/_cache/`
+(136 tickers x 15y daily, built by `research/cache_data.py`).
 
-- v1 (trend 1.272 ext; range R1/S1): 2/74, med err 7.3%
-- v2 (v1 + RSI-21 regime: strong 1.618 ext / weak 0.786 retrace): **9/74
-  (11% fit / 14% holdout), med err 5.1% — current best**
-- v3 (alternation + 50% retrace): 4/74, med err 4.7%, dir 62%
-- v4 (alternation + 38.2% retrace): 3/74, med err 5.4%
+## 1. What was actually wrong
 
-### v2 hits (asof -> truth)
+The old scoreboard reported `hit_rate` with nothing beside it. Scored against
+its own rule, the following forecasters — which look at nothing — do better:
 
-| asof | pred | truth | err | branch |
+AAPL, 15y, 682 walk-forward points, the harness's own point selection and
+its own HIT rule (right direction AND level within 1%):
+
+| forecaster | hits | rate | vs v2 | McNemar p |
 |---|---|---|---|---|
-| 2025-05-29 | dn 197.18 (1d) | low 195.83 in 1d | 0.69% | range |
-| 2025-06-24 | dn 196.67 (1d) | low 198.30 in 4d | 0.82% | range |
-| 2025-07-14 | up 213.27 (2d) | high 214.74 in 5d | 0.68% | weak-up |
-| 2025-10-24 | up 277.42 (4d) | high 276.30 in 5d | 0.41% | strong-up |
-| 2025-12-23 | up 276.39 (1d) | high 274.68 in 1d | 0.62% | range |
-| 2026-02-19 | up 274.77 (3d) | high 275.62 in 5d | 0.31% | weak-up |
-| 2026-03-13 | dn 247.80 (1d) | low 245.56 in 5d | 0.91% | strong-down |
-| 2026-07-28 | up 344.36 (1d) | high 344.27 in 1d | 0.03% | strong-up |
-| 2026-08-11 | dn 303.22 (1d) | low 300.57 in 1d | 0.88% | weak-down |
+| NULL close ± 0.75×ATR14, direction = alternation | 134 | 19.7% | **+9.7pp** | 0.000004 |
+| NULL close ± 1.0×ATR14, direction = alternation | 134 | 19.7% | **+9.7pp** | 0.000004 |
+| NULL close × 1.02, direction = always up | 131 | 19.2% | **+9.2pp** | 0.000009 |
+| NULL close ± 1.0×ATR14, direction = coin flip | 109 | 16.0% | +6.0pp | 0.0013 |
+| v2 ("current best") | 68 | 10.0% | — | — |
+| v1 | 37 | 5.4% | | |
+| v3 | 32 | 4.7% | | |
+| v4 | 29 | 4.3% | | |
 
-v1 hits: 2025-10-15 up 262.42 -> high 264.31 (0.72%); 2026-03-12 dn
-247.14 -> low 245.56 (0.64%). v3/v4 hits in `AAPL/swingtest_v3/v4.csv`.
-Full tables: `research/AAPL/swingtest_v1-v4.csv`.
+Verdict printed by the harness itself now: *v1, v2, v3 are significantly worse
+than 4 of 6 zero-information baselines; v4 is worse than 5 of 6.*
 
-## 2. 10-day range loop (1500+ combos, AAPL/QQQ/SPY)
+Two further diagnostics explain why, and both were confirmed independently:
 
-Target: next-10-day high AND low each within 1%.
+- **The level model is worse than doing nothing.** v2's median level error is
+  3.82%; simply emitting today's close gives 2.85%.
+- **The direction model is worse than a constant.** v2's direction accuracy is
+  53.0% against a majority-class rate of 53.3%. v3's celebrated "62%" is the
+  alternation base rate, not skill — a rule that just alternates after every
+  swing scores 56.5% on a 12,661-point panel with no information at all.
 
-- SPY close +/-1.5xATR20 (no trend): **28.4% hits**, med err 0.75%/1.21%
-- SPY + rsi50 asymmetry: 27.2% hits, direction 61.7%
-- QQQ best: 13.6%. AAPL best: 6.2% (macd, hi20+1.0ATR / close-1.5ATR).
-- Full grid: `research/loop_results.csv`.
+The 1% band is also mis-scaled: the median distance from the as-of close to the
+next fractal is about 2.9%, so a 1% band mostly measures whether the move
+happened to be small, i.e. realized volatility, not forecast quality.
 
-$25k month-sim vs SPY (select Jun+Jul, holdout Aug 2026, costs in): wave 1
-"best" was buy-hold luck (dir 46%); wave 2 fade +7.4% sel -> Aug -2.2%
-Worst; wave 3 regime-adaptive +5.8% sel -> Aug -3.0% Worst; wave 4
-long/flat timers all negative on selection. No timing edge survived.
-Details: `wave2.csv`, `wave3.csv`, `loop_best.json`, SWING_ALGO.md §6.
+**Verified clean:** there is no lookahead anywhere in the prediction path. The
+k-bar fractal confirmation lag is honoured, indicators are causal, and the
+`known_at` discipline holds. That part of the old work was done correctly. The
+problem was statistical, not causal.
 
-## 3. Stop-loss methodology per system
+**Also retracted:** the "SPY 10-day range = 28.4% hits" headline. It is the
+99.8th percentile of a 500-combo in-sample search, and a constant band with no
+search at all matches or beats it. It is a volatility estimate, not a forecast.
 
-- `signals.py` (long/short/reversal/rejection): structure + 0.25xATR14
-  buffer. Long: min(bar low, swing low) - buffer. Short mirrors above.
-  Reversal: under support - buffer. Rejection: above resistance + buffer.
-  Targets = opposite swing; RR printed per setup.
-- Live analyzer (`scanner/analyze.py`): base Long uses validated
-  `risk_of()` (breakout: back inside the level, clamped 0.2-3xATR);
-  qualifiers use level +/-0.5% (beyond invalidation).
-- Backtest engine (`backtest/combos.py`): fixed -1R / +2-3R + 20-bar time
-  stop; chandelier trail 2.5-3.0xATR + 40-bar cap; 2.5bps/side.
-- Month capital sims: NO stop-loss. Daily rebalance on edge sign only;
-  exits = signal flips. Wiring signals.py stops into the sim loop is the
-  open follow-up.
+## 2. What replaced it
 
-## 4. Repro
+The old target — "the exact price of the next k=3 fractal, within 1%" — is not
+the question the rest of this repo asks. `grading.md`, `backtest/NOTES.md` and
+`review/LOOP.md` all grade on **expectancy in R**, and explicitly say win rate
+never promotes a grade. The research track had drifted onto an accuracy metric
+that does not convert to P&L, which is exactly what the month simulations then
+discovered the hard way.
+
+New stack, all scored on expectancy:
+
+| file | role |
+|---|---|
+| `cache_data.py` | one-time local OHLCV cache; makes every run reproducible offline |
+| `panel.py` | causal features (31) + triple-barrier labels; entry at next open, stop wins intrabar ties |
+| `models.py` | ridge logistic regression and gradient-boosted stumps, both pure numpy (no sklearn on this box) |
+| `evaluate.py` | purged/embargoed walk-forward, date-block bootstrap, circular-shift permutation test, `grading.md` rubric |
+| `run_v5.py` | absolute (per-bar) study |
+| `cross_section.py` | beta-neutral ranking study |
+| `sanity_check.py` | proves the harness can detect an edge that is really there |
+| `baselines.py` | the nulls, now wired into the old harness so it can never again print a bare hit rate |
+
+The question is now: *given the features at the close of bar t, should a trade
+be opened at the next open, and what is its expected R?* Barriers are
+stop = 1.5×ATR14, target = 2R, time limit 20 bars.
+
+## 3. AAPL result (single ticker, 15y, purged walk-forward)
+
+3,553 bars, 2,547 out-of-sample rows, 6 folds, 2016-06 → 2026-08.
+
+| rule | trades | win rate | expectancy R | 95% CI | grade |
+|---|---|---|---|---|---|
+| take every bar (pure exposure) | 2,547 | 50.3% | **+0.403** | [+0.347, +0.460] | A |
+| shuffled probabilities (null) | 794 | 50.8% | +0.424 | [+0.323, +0.518] | A |
+| repo primary: breakout ADX≥20 RVOL≥2 | 17 | 52.9% | +0.388 | [−0.218, +1.020] | A (thin) |
+| logistic model, p ≥ q70 | 794 | 55.4% | +0.562 | [+0.466, +0.661] | A+ |
+| boosted stumps, p ≥ q95 | 237 | 54.0% | +0.554 | [+0.365, +0.741] | A+ |
+
+That table looks like a win. It is not, for two reasons.
+
+**First, the baseline is beta.** Buying AAPL on any random bar and managing it
+with these barriers returns +0.40R, which grades A on the repo's own rubric
+before any model exists. AAPL rose roughly 16x over the sample. Any long-only
+result on this ticker inherits that.
+
+**Second, the lift does not survive a valid test.** The model's trades are a
+subset of the always-trade population, so comparing their confidence intervals
+is not a significance test. Holding the selection size fixed and destroying
+only the alignment between score and outcome (circular-shift permutation,
+2,000 draws, which preserves the autocorrelation that overlapping 20-bar labels
+create):
+
+| model | best rule | observed R | same-size null R | null 95th pct | p | Bonferroni p |
+|---|---|---|---|---|---|---|
+| logistic | q70, 794 trades | +0.562 | +0.399 | +0.604 | 0.093 | 0.463 |
+| boosted stumps | q95, 237 trades | +0.554 | +0.397 | +0.748 | 0.216 | 1.000 |
+
+Neither is significant. Selection skill is **not** demonstrated on AAPL.
+
+Discrimination agrees: AUC 0.527 (logistic) and 0.500 (stumps).
+
+## 4. The harness is not the problem — `sanity_check.py`
+
+"No edge" and "broken code" produce the same AUC. These four checks separate
+them, on AAPL:
+
+| check | result | reading |
+|---|---|---|
+| train vs test AUC | 0.65 / 0.69 train, 0.52 / 0.52 test | the learner fits; the signal does not generalise |
+| planted signal, strength 0.02 → 0.25 | test AUC 0.519 → 0.619 | the pipeline recovers a real edge, and scales with it |
+| shuffled labels | test AUC 0.459 | no leakage |
+| label arithmetic | stop 51.4%, target 37.1%, timeout 11.5% | barriers self-consistent |
+
+So the negative result is a finding about the data, not about the code.
+
+## 5. What is genuinely reusable
+
+- **`close ± 1.0×ATR14` as a level estimator.** It beat every hand-built
+  predictor here by 6–10 points. Use it for stop and target placement, which is
+  what it is actually good for. Do not call it a forecast.
+- **The causal data plumbing.** `fractal_swings`, the `known_at` discipline and
+  the indicator maps verified clean under adversarial review.
+- **The expectancy rubric.** It was right all along; the research track just
+  stopped using it.
+
+## 6. Honest ceiling
+
+From daily OHLCV alone on one megacap name, independently estimated during the
+audit: direction AUC around 0.62 at 4+ bars against a 57.6% majority base rate,
+and level R² around 0.02 in ATR units. A 1%-band point forecast of the next
+swing is not reachable, and chasing it further is not a good use of time.
+
+The productive directions from here, in order: (a) intraday data, where the
+repo's own 60d study already found structure the daily bars cannot see;
+(b) cross-sectional ranking over a wide universe rather than one ticker; and
+(c) treating volatility, not direction, as the forecastable quantity — the ATR
+band result says that is where the predictability actually lives.
+
+## 8. Follow-up: does a size forecast improve the graded directional algos?
+
+Tested 2026-09-11 across five strands with adversarial verification. Short
+answer: no, because R is denominated in ATR and the size forecast is 94%
+rank-redundant with that ATR, so the effect cancels. The mechanism is real
+under perfect foresight (+1.86R oracle spread) but the forecastable component
+is volatility LEVEL, which the risk unit already absorbs. The run also found
+the grade-A breakout primary is regime-dependent: -0.40R over 2012-2020 versus
++1.66R over 2021-2026. Full writeup: `research/SIZE_PLUS_DIRECTION.md`.
+
+## 7. Repro
 
 ```bash
-python research/fetch_stock.py --ticker XXX
-python research/fetch_context.py --ticker XXX
-python research/backtest_swings.py --ticker XXX --version v2
-python research/range_loop.py --budget-min 12
+python research/cache_data.py                                        # once
+python research/backtest_swings.py --ticker AAPL --version v2 --period 15y
+python research/run_v5.py --model logit --tickers AAPL --folds 6
+python research/sanity_check.py --tickers AAPL
+python research/cross_section.py --top-k 10 --universe universe/universe_sp500.csv
 ```
