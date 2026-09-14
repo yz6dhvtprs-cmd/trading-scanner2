@@ -53,17 +53,26 @@ python scanner/backtest_analyzer.py --ticker AAPL --days 20 --algo OLD --score  
 RPS_WASH_LO=40 RPS_WASH_HI=60 python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score  # threshold sweep
 ```
 
-## Simple DEMA scanner (pullback to value)
+## Simple EMA scanner (pullback to value)
 
-Setup: Close below DEMA 8/10/21 while within 1xATR of DEMA50, RSI14 >=
-`--rsi-min` (default 40; `--no-rsi` disables). Backtest per fresh signal
-(entry = signal-day close): days to +20%, max %, current %. Live: intraday
-runs it every 15m over spy50+qqq50 with 3-day alert dedupe and a 5-day /
-recovery ignore list (`scanner/dema_state.json`).
+Setup: Close below EMA 8/13/21 while within 1xATR of EMA50, RSI14 inside
+`--rsi-target` +/- `--rsi-tol` (default 40 +/- 2; `--no-rsi` disables),
+plus as-of weekly RSI14 above `--wrsi-min` (default 55: daily pullback
+inside a weekly uptrend; weekly value uses completed Friday weeks plus the
+bar's own close as the forming week, same as a live chart). The previous
+daily close must still have been strictly above EMA50 (first touch only).
+Backtest per fresh signal (entry = signal-day close): days to +20%, max %,
+current %, plus a `page` column (Y = live would page it, - = muted by the
+3-trading-day dedupe). Live: intraday runs it every 15m over spy50+qqq50
+with 3-trading-day alert dedupe and a 5-trading-day / recovery ignore list
+(`scanner/ema_state.json`). `--simulate` replays the exact live rules over
+history — forming-bar drop, 5-trading-day parks, 3-session dedupe — and
+prints what would have paged vs muted with reasons:
 
 ```
 python scanner/simple_scan.py --ticker NVDA --days 60
-python scanner/simple_scan.py --pool spy50 --days 90 --target 0.20 --rsi-min 45
+python scanner/simple_scan.py --pool spy50 --days 90 --target 0.20 --rsi-target 40 --rsi-tol 2
+python scanner/simple_scan.py --pool spy50 --days 60 --simulate
 ```
 
 Pools: sp100 (top-100 S&P weights, proxy), sp500, spy, qqq, spy50, qqq50

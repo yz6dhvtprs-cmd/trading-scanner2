@@ -68,6 +68,26 @@ def is_open(day: dt.date) -> bool:
     return day.weekday() < 5 and day not in holidays(day.year)
 
 
+def trading_gap(prev: dt.date, today: dt.date) -> int:
+    """Trading sessions in (prev, today]: 0 same-day, 1 next session."""
+    n, d = 0, prev + dt.timedelta(days=1)
+    while d <= today:
+        if is_open(d):
+            n += 1
+        d += dt.timedelta(days=1)
+    return n
+
+
+def add_trading_days(day: dt.date, n: int) -> dt.date:
+    """Date n trading sessions after `day` (skips weekends/holidays)."""
+    d = day
+    while n > 0:
+        d += dt.timedelta(days=1)
+        if is_open(d):
+            n -= 1
+    return d
+
+
 def main() -> int:
     arg = sys.argv[1] if len(sys.argv) > 1 else dt.date.today().isoformat()
     day = dt.date.fromisoformat(arg)
