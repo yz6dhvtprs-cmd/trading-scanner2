@@ -2,8 +2,9 @@
 
 Setup (daily): Close below EMA 8, 13 AND 21, while within 1xATR of EMA50
 (either side) — price raining under the short trends but sitting on value —
-plus RSI14 inside --rsi-target +/- --rsi-tol (default 40 +/- 2: pullback to
-neutral, neither hot nor dead; --no-rsi disables) AND as-of weekly RSI14
+plus RSI14 from --rsi-target up to --rsi-target + --rsi-tol (default
+40 to 42: pullback to neutral, neither hot nor dead; --no-rsi disables)
+AND as-of weekly RSI14
 above --wrsi-min (default 55: the pullback sits inside a weekly uptrend).
 The previous daily close must still have been strictly above EMA50 — first
 touch of value only, not names camped under the line.
@@ -23,6 +24,7 @@ Usage:
     python scanner/simple_scan.py --pool spy50 --days 60 --simulate
 Pools: sp100 (top-100 S&P500 by weight, proxy), sp500, spy (=sp500),
 qqq (=nasdaq100), spy50, qqq50 (top 50 by ETF weight, SlickCharts 09-2026).
+Join with '+' for a union: --pool spy50+qqq50.
 """
 from __future__ import annotations
 
@@ -55,6 +57,27 @@ def load_pool(name: str) -> list:
     if name == "sp100":
         return read("sp500_w.csv")[:100]  # proxy: 100 largest S&P weights
     raise ValueError(f"unknown pool {name}")
+
+
+POOLS = ("sp100", "sp500", "spy", "qqq", "spy50", "qqq50")
+
+
+def load_pools(spec: str) -> list:
+    """One pool or '+'-joined union, e.g. spy50+qqq50. Order-preserving,
+    de-duplicated (tickers in yfinance form)."""
+    out, seen = [], set()
+    for part in spec.split("+"):
+        part = part.strip().lower()
+        if part not in POOLS:
+            raise ValueError(f"unknown pool {part!r} in {spec!r} "
+                             f"(choose from {', '.join(POOLS)}, '+'-joined)")
+        for t in load_pool(part):
+            if t not in seen:
+                seen.add(t)
+                out.append(t)
+    if not out:
+        raise ValueError(f"empty pool spec {spec!r}")
+    return out
 
 
 def ema(s: pd.Series, n: int) -> pd.Series:
@@ -106,12 +129,13 @@ def add_ind(d: pd.DataFrame) -> pd.DataFrame:
 
 def setup_row(r, rsi_on: bool = True, rsi_target: float = 40.0,
               rsi_tol: float = 2.0, atr_mult: float = 1.0,
-              wrsi_min: float = 55.0, prev_close=None) -> bool:
+              wrsi_min: float = 55.0, prev_close=None,
+              today_open=None) -> bool:
     """One-bar EMA50+RSI rule (shared by batch scan and live stage). Daily
     RSI must sit in the target band AND as-of weekly RSI must clear
-    `wrsi_min` (uptrend regime for the long). The previous daily close must
-    still have been strictly above EMA50 — first touch of value only, not
-    names camped under the line."""
+    `wrsi_min` (uptrend regime for the long). The previous daily close AND
+    today's open must both have printed strictly above EMA50 — first touch
+    of value only, not names camped under the line or gapping under it."""
     if not (r["Close"] < r["ema8"] and r["Close"] < r["ema13"] and
             r["Close"] < r["ema21"]):
         return False
@@ -119,9 +143,12 @@ def setup_row(r, rsi_on: bool = True, rsi_target: float = 40.0,
         return False
     if prev_close is None or not (prev_close > r["ema50"]):
         return False
+    if today_open is None or not (today_open > r["ema50"]):
+        return False
     if not rsi_on:
         return True
-    return abs(r["rsi"] - rsi_target) <= rsi_tol and r["wrsi"] > wrsi_min
+    return rsi_target <= r["rsi"] <= rsi_target + rsi_tol \
+        and r["wrsi"] > wrsi_min
 
 
 def fresh_signals(d: pd.DataFrame, days: int, rsi_on: bool = True,
@@ -131,10 +158,12 @@ def fresh_signals(d: pd.DataFrame, days: int, rsi_on: bool = True,
     """First-bar-only signals inside the last `days` bars."""
     d = d.copy()
     closes = d["Close"].tolist()
+    opens = d["Open"].tolist()
     sig = pd.Series([setup_row(r, rsi_on, rsi_target, rsi_tol, atr_mult,
-                               wrsi_min, prev)
-                     for (_, r), prev in zip(d.iterrows(),
-                                             [None] + closes[:-1])],
+                               wrsi_min, prev, opn)
+                     for (_, r), prev, opn in zip(d.iterrows(),
+                                                  [None] + closes[:-1],
+                                                  opens)],
                     index=d.index)
     d["sig"] = sig & ~sig.shift(1, fill_value=False)
     return d.tail(days)
@@ -184,6 +213,7 @@ def live_sim(d: pd.DataFrame, eval_days: list, rsi_on: bool = True,
     rows = []
     bar_dates = d.index.date
     closes = d["Close"].tolist()
+    opens = d["Open"].tolist()
     alerted, ignored_until = None, None
     for D in eval_days:
         past = d[bar_dates < D]
@@ -193,6 +223,7 @@ def live_sim(d: pd.DataFrame, eval_days: list, rsi_on: bool = True,
         r = past.iloc[-1]
         loc = d.index.get_loc(day)
         prev = closes[loc - 1] if loc >= 1 else None
+        opn = opens[loc]
         px, d50 = float(r["Close"]), float(r["ema50"])
         if px < d50 - float(r["atr"]):  # broken too deep: park it
             ignored_until = add_trading_days(D, ignore_days)
@@ -202,12 +233,12 @@ def live_sim(d: pd.DataFrame, eval_days: list, rsi_on: bool = True,
                 ignored_until = None
             else:
                 if setup_row(r, rsi_on, rsi_target, rsi_tol, atr_mult,
-                               wrsi_min, prev):
+                               wrsi_min, prev, opn):
                     rows.append(_row(D, day, r, "MUTED-IGNORE",
                                      f"parked till {ignored_until}"))
                 continue
         if not setup_row(r, rsi_on, rsi_target, rsi_tol, atr_mult,
-                         wrsi_min, prev):
+                         wrsi_min, prev, opn):
             continue
         if alerted is not None and trading_gap(alerted, D) <= PAGE_GAP:
             rows.append(_row(D, day, r, "MUTED-DEDUP",
@@ -320,7 +351,7 @@ def simulate(tickers: list, days: int, rsi_on: bool = True,
 
 def run_simulate(tickers: list, a) -> int:
     print(f"live-replay {len(tickers)} names, last {a.days}d, "
-          f"{'rsi=%g+/-%g wrsi>%g' % (a.rsi_target, a.rsi_tol, a.wrsi_min)
+          f"{'rsi=%g+%g wrsi>%g' % (a.rsi_target, a.rsi_tol, a.wrsi_min)
              if a.rsi else 'rsi=off'}",
           flush=True)
     rows = simulate(tickers, a.days, a.rsi, a.rsi_target, a.rsi_tol,
@@ -344,8 +375,9 @@ def main() -> int:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--ticker", action="append", default=[],
                    help="repeatable, e.g. --ticker NVDA --ticker AAPL")
-    g.add_argument("--pool", choices=["sp100", "sp500", "spy", "qqq",
-                                      "spy50", "qqq50"])
+    g.add_argument("--pool", metavar="POOL",
+                   help="one of sp100/sp500/spy/qqq/spy50/qqq50, or "
+                        "'+'-joined union e.g. spy50+qqq50")
     ap.add_argument("--days", type=int, default=60,
                     help="signal window (trailing daily bars)")
     ap.add_argument("--target", type=float, default=0.20,
@@ -355,7 +387,7 @@ def main() -> int:
     ap.add_argument("--rsi-target", type=float, default=40.0,
                     help="RSI band center for the setup")
     ap.add_argument("--rsi-tol", type=float, default=2.0,
-                    help="RSI band half-width (target +/- tol)")
+                    help="RSI band upper extension (target to target+tol)")
     ap.add_argument("--atr-mult", type=float, default=1.0,
                     help="EMA50 proximity band in ATRs")
     ap.add_argument("--wrsi-min", type=float, default=55.0,
@@ -364,9 +396,14 @@ def main() -> int:
                     help="replay live paging (PAGED/MUTED rows) instead of "
                          "the backtest list")
     a = ap.parse_args()
-    tickers = [t.upper() for t in a.ticker] if a.ticker \
-        else load_pool(a.pool)
-    gate = f"rsi={a.rsi_target:.0f}+/-{a.rsi_tol:.0f} wrsi>{a.wrsi_min:.0f}" \
+    if a.ticker:
+        tickers = [t.upper() for t in a.ticker]
+    else:
+        try:
+            tickers = load_pools(a.pool)
+        except ValueError as e:
+            ap.error(str(e))
+    gate = f"rsi={a.rsi_target:.0f}+{a.rsi_tol:.0f} wrsi>{a.wrsi_min:.0f}" \
         if a.rsi else "rsi=off"
     if a.simulate:
         return run_simulate(tickers, a)

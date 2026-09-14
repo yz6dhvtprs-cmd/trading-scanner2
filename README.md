@@ -55,12 +55,14 @@ RPS_WASH_LO=40 RPS_WASH_HI=60 python scanner/backtest_analyzer.py --ticker AAPL 
 
 ## Simple EMA scanner (pullback to value)
 
-Setup: Close below EMA 8/13/21 while within 1xATR of EMA50, RSI14 inside
-`--rsi-target` +/- `--rsi-tol` (default 40 +/- 2; `--no-rsi` disables),
+Setup: Close below EMA 8/13/21 while within 1xATR of EMA50, RSI14 from
+`--rsi-target` to `--rsi-target` + `--rsi-tol` (default 40 to 42;
+`--no-rsi` disables),
 plus as-of weekly RSI14 above `--wrsi-min` (default 55: daily pullback
 inside a weekly uptrend; weekly value uses completed Friday weeks plus the
 bar's own close as the forming week, same as a live chart). The previous
-daily close must still have been strictly above EMA50 (first touch only).
+daily close and today's open must both have printed strictly above EMA50
+(first touch only, no gap-unders).
 Backtest per fresh signal (entry = signal-day close): days to +20%, max %,
 current %, plus a `page` column (Y = live would page it, - = muted by the
 3-trading-day dedupe). Live: intraday runs it every 15m over spy50+qqq50
@@ -76,7 +78,8 @@ python scanner/simple_scan.py --pool spy50 --days 60 --simulate
 ```
 
 Pools: sp100 (top-100 S&P weights, proxy), sp500, spy, qqq, spy50, qqq50
-(weight-ranked, SlickCharts 09-2026, baked into `universe/*_w.csv`).
+(weight-ranked, SlickCharts 09-2026, baked into `universe/*_w.csv`);
+`--pool` also takes `+` unions like `spy50+qqq50`.
 
 ## Gate before live
 

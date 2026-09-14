@@ -39,6 +39,18 @@ case "$MODE" in
       >> "$PROJ/scanner/logs/bootstrap-$STAMP.log" 2>&1
     ;;
   intraday)
+    # session only: regular-hours tape, no weekend/evening re-evaluation
+    if ! python scanner/market_calendar.py > /dev/null 2>&1; then
+      echo "$(date '+%F %T') intraday skipped: market closed" \
+        >> "$PROJ/scanner/logs/intraday-$STAMP.log" 2>&1
+      exit 0
+    fi
+    HM=$((10#$(date +%H%M)))
+    if [ "$HM" -lt 630 ] || [ "$HM" -gt 1300 ]; then
+      echo "$(date '+%F %T') intraday skipped: outside 06:30-13:00 PT" \
+        >> "$PROJ/scanner/logs/intraday-$STAMP.log" 2>&1
+      exit 0
+    fi
     python scanner/intraday.py --channels imessage \
       >> "$PROJ/scanner/logs/intraday-$STAMP.log" 2>&1
     ;;

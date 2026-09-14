@@ -17,7 +17,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from simple_scan import add_ind, ema, fresh_signals, live_sim, mark_pages
-from simple_scan import setup_row
+from simple_scan import load_pool, load_pools, setup_row
 
 
 def row(close=100.0, e8=101.0, e13=102.0, e21=103.0, e50=100.5,
@@ -26,9 +26,10 @@ def row(close=100.0, e8=101.0, e13=102.0, e21=103.0, e50=100.5,
             "ema50": e50, "atr": atr, "rsi": rsi, "wrsi": wrsi}
 
 
-def prv(r, prev_close=101.0, **kw):
-    """setup_row with an explicit previous close (strictly-above gate)."""
-    return setup_row(r, prev_close=prev_close, **kw)
+def prv(r, prev_close=101.0, today_open=101.0, **kw):
+    """setup_row with explicit previous close / today's open gates."""
+    return setup_row(r, prev_close=prev_close, today_open=today_open,
+                     **kw)
 
 
 def test_prev_close_gate():
@@ -38,14 +39,22 @@ def test_prev_close_gate():
     assert prv(row(), None) is False   # first bar: no previous close
 
 
+def test_today_open_gate():
+    assert prv(row(), today_open=101.0) is True
+    assert prv(row(), today_open=100.5) is False  # at, not above
+    assert prv(row(), today_open=99.0) is False   # gapped under the line
+    assert prv(row(), today_open=None) is False
+
+
 def test_valid_bar():
     assert prv(row()) is True
 
 
 def test_rsi_band_edges():
-    assert prv(row(rsi=38.0)) is True
-    assert prv(row(rsi=42.0)) is True
-    assert prv(row(rsi=37.9)) is False
+    assert prv(row(rsi=40.0)) is True   # floor inclusive
+    assert prv(row(rsi=42.0)) is True   # ceiling inclusive
+    assert prv(row(rsi=39.9)) is False  # below target: no -2 side
+    assert prv(row(rsi=38.0)) is False
     assert prv(row(rsi=42.1)) is False
     assert prv(row(rsi=61.5)) is False  # hot: not a 40-zone pullback
 
@@ -87,7 +96,9 @@ def test_weekly_rsi_forming_week_moves_same_day():
 
 def test_custom_band():
     assert prv(row(rsi=50.0), rsi_target=50.0, rsi_tol=2.0) is True
-    assert prv(row(rsi=47.9), rsi_target=50.0, rsi_tol=2.0) is False
+    assert prv(row(rsi=52.0), rsi_target=50.0, rsi_tol=2.0) is True
+    assert prv(row(rsi=49.9), rsi_target=50.0, rsi_tol=2.0) is False
+    assert prv(row(rsi=52.1), rsi_target=50.0, rsi_tol=2.0) is False
 
 
 def test_short_trend_gate():
@@ -112,7 +123,7 @@ def test_plain_ema_not_dema():
 def frame(n=120, rsi=40.0) -> pd.DataFrame:
     idx = pd.date_range("2026-01-01", periods=n, freq="B")
     return pd.DataFrame({
-        "Open": 100.0, "High": 101.0, "Low": 99.0, "Close": 100.0,
+        "Open": 100.5, "High": 101.0, "Low": 99.0, "Close": 100.0,
         "Volume": 1000}, index=idx)
 
 
@@ -140,6 +151,21 @@ def test_fresh_first_bar_only():
     assert len(hits) == 1 and hits[0] == sig.index[-3]
 
 
+def test_pool_union():
+    both = load_pools("spy50+qqq50")
+    assert len(both) == len(set(both))  # de-duplicated
+    for t in load_pool("spy50") + load_pool("qqq50"):
+        assert t in both
+    assert len(both) <= 100
+    assert load_pools("spy50") == load_pool("spy50")  # single still works
+    try:
+        load_pools("spy50+bogus")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError for unknown pool")
+
+
 def test_mark_pages_gap():
     assert mark_pages([]) == []
     assert mark_pages([10]) == [True]
@@ -155,7 +181,7 @@ def sim_frame():
     # first-touch gate passes; validity is forced per-bar below
     idx = pd.bdate_range("2026-10-05", periods=12)
     d = add_ind(pd.DataFrame({
-        "Open": 100.0, "High": 101.0, "Low": 99.0, "Close": 100.5,
+        "Open": 100.5, "High": 101.0, "Low": 99.0, "Close": 100.5,
         "Volume": 1000}, index=idx))
     for c in ("ema8", "ema13", "ema21"):
         d[c] = 101.0

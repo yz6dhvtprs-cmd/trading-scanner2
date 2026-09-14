@@ -43,7 +43,7 @@ STATE = os.path.join(ROOT, "scanner", "intraday_state.json")
 # no cap: fixed ETF pool, every open/watchlist name is evaluated
 EMA_STATE = os.path.join(ROOT, "scanner", "ema_state.json")
 EMA_RSI_ON = True         # live gate mirrors --rsi default
-EMA_RSI_TARGET, EMA_RSI_TOL = 40.0, 2.0  # mirrors --rsi-target/--rsi-tol
+EMA_RSI_TARGET, EMA_RSI_TOL = 40.0, 2.0  # band = target..target+tol
 EMA_WRSI_MIN = 55.0       # mirrors --wrsi-min (weekly regime gate)
 EMA_ATR_MULT = 1.0        # proximity band mirrors --atr-mult
 EMA_IGNORE_DAYS = 5       # ignores last this many TRADING days at most
@@ -238,6 +238,7 @@ def main() -> int:
                 if len(f) < 70:
                     continue
                 prev_close = float(f["Close"].iloc[-2])
+                today_open = float(f["Open"].iloc[-1])
                 last = ema_ind(f).iloc[-1]
             except Exception:
                 continue
@@ -261,7 +262,7 @@ def main() -> int:
                     continue
             if not setup_row(last, EMA_RSI_ON, EMA_RSI_TARGET,
                              EMA_RSI_TOL, EMA_ATR_MULT, EMA_WRSI_MIN,
-                             prev_close):
+                             prev_close, today_open):
                 continue
             prev = dst["alerted"].get(t)
             if prev is not None:
