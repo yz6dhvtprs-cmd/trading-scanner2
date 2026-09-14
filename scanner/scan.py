@@ -24,7 +24,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "backtest"))
-from combos import add_features, level_of, risk_of, signal_mask  # noqa: E402
+from combos import add_features, level_of, pick, risk_of, signal_mask  # noqa: E402
 from indicators2 import add_extra, alignment  # noqa: E402
 from notify import alert, load_config  # noqa: E402
 from backtest_analyzer import rps_live  # noqa: E402  (same RPS code as --algo RPS)
@@ -41,7 +41,7 @@ def download(tickers: list, period: str, interval: str):
     frames = {}
     for t in tickers:
         try:
-            h = px[t] if len(tickers) > 1 else px
+            h = pick(px, t)
             h = h.dropna(subset=["Close"])
             h.columns = [c.capitalize() for c in h.columns]
             if len(h) > 250:
@@ -136,7 +136,7 @@ def download_tf(tickers: list, interval: str) -> dict:
     frames = {}
     for t in tickers:
         try:
-            h = px[t] if len(tickers) > 1 else px
+            h = pick(px, t)
             h = h.dropna(subset=["Close"])
             h.columns = [c.capitalize() for c in h.columns]
             if len(h) > 40:

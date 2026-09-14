@@ -246,7 +246,7 @@ def main() -> int:
 
     def hist_of(t):
         try:
-            h = px[t] if len(tickers) > 1 else px
+            h = (px[t] if isinstance(px.columns, pd.MultiIndex) else px)
             h = h.dropna(subset=["Close"])
             h.columns = [c.capitalize() for c in h.columns]
             return h

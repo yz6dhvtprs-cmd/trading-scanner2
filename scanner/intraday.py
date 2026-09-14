@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "backtest"))
 from notify import alert, load_config  # noqa: E402
 from backtest_analyzer import rps_live  # noqa: E402  (same code as --algo RPS)
-from combos import add_features  # noqa: E402
+from combos import add_features, pick  # noqa: E402
 from indicators2 import add_extra  # noqa: E402
 from scan import fmt_row  # noqa: E402  (shared alert text)
 from simple_scan import add_ind as dema_ind  # noqa: E402
@@ -42,6 +42,7 @@ STATE = os.path.join(ROOT, "scanner", "intraday_state.json")
 # no cap: fixed ETF pool, every open/watchlist name is evaluated
 DEMA_STATE = os.path.join(ROOT, "scanner", "dema_state.json")
 DEMA_RSI_ON, DEMA_RSI_MIN = True, 40.0  # live gate mirrors --rsi defaults
+DEMA_ATR_MULT = 1.0       # proximity band mirrors --atr-mult
 DEMA_IGNORE_DAYS = 5      # deep-break ignores last this long at most
 DEMA_ALERT_GAP = 3        # re-alert a ticker only after this many days
 
@@ -110,7 +111,7 @@ def main() -> int:
     bars = {}
     for t in syms:
         try:
-            h = flat(px[t] if len(syms) > 1 else px).dropna(subset=["Close"])
+            h = flat(pick(px, t)).dropna(subset=["Close"])
             if len(h):
                 bars[t] = h
         except Exception:
@@ -220,9 +221,17 @@ def main() -> int:
     if dd is not None:
         for t in pool:
             try:
-                f = flat(dd[t] if len(pool) > 1 else dd).dropna(
-                    subset=["Close"])
+                f = flat(pick(dd, t)).dropna(subset=["Close"])
                 f.columns = [str(c).capitalize() for c in f.columns]
+                # completed bars only: today's forming bar would let a
+                # mid-day print alert a setup the daily chart never shows
+                # (this matches the backtest, which scores closed bars).
+                try:
+                    forming = f.index[-1].date() >= today
+                except Exception:
+                    forming = False
+                if forming:
+                    f = f.iloc[:-1]
                 if len(f) < 70:
                     continue
                 last = dema_ind(f).iloc[-1]
@@ -246,7 +255,8 @@ def main() -> int:
                     del dst["ignored"][t]
                 else:
                     continue
-            if not setup_row(last, DEMA_RSI_ON, DEMA_RSI_MIN):
+            if not setup_row(last, DEMA_RSI_ON, DEMA_RSI_MIN,
+                              DEMA_ATR_MULT):
                 continue
             prev = dst["alerted"].get(t)
             if prev is not None:

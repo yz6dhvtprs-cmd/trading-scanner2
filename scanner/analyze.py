@@ -25,7 +25,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "backtest"))
-from combos import add_features, level_of, risk_of, signal_mask  # noqa: E402
+from combos import add_features, level_of, pick, risk_of, signal_mask  # noqa: E402
 from indicators2 import add_extra  # noqa: E402
 from notify import alert, load_config  # noqa: E402
 
@@ -369,8 +369,7 @@ def main() -> int:
     prev = _load_state()
     for t in syms:
         try:
-            h = pxd[t] if len(syms) > 1 else pxd
-            h = flat(h).dropna(subset=["Close"])
+            h = flat(pick(pxd, t)).dropna(subset=["Close"])
             if len(h) < 225:
                 continue
             d = add_extra(add_features(h))

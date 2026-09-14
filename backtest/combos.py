@@ -21,6 +21,20 @@ import sys
 import numpy as np
 import pandas as pd
 
+
+def pick(px: pd.DataFrame, t: str) -> pd.DataFrame:
+    """One ticker's OHLC frame from a yfinance batch download, whatever
+    shape one- vs multi-ticker fetch returns: (Ticker, Price) MultiIndex
+    -> select the ticker level; flat -> already one ticker."""
+    if isinstance(px.columns, pd.MultiIndex):
+        try:
+            return px[t]
+        except KeyError:
+            px = px.copy()
+            px.columns = px.columns.get_level_values(-1)
+            return px
+    return px
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(ROOT, "backtest", "cache_sp500.pkl")
 SP500_URL = ("https://raw.githubusercontent.com/datasets/s-and-p-500-companies"

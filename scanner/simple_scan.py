@@ -77,22 +77,24 @@ def add_ind(d: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
-def setup_row(r, rsi_on: bool = True, rsi_min: float = 40.0) -> bool:
+def setup_row(r, rsi_on: bool = True, rsi_min: float = 40.0,
+              atr_mult: float = 1.0) -> bool:
     """One-bar DEMA50+RSI rule (shared by batch scan and live stage)."""
     if not (r["Close"] < r["dema8"] and r["Close"] < r["dema10"] and
             r["Close"] < r["dema21"]):
         return False
-    if abs(r["Close"] - r["dema50"]) > r["atr"]:
+    if abs(r["Close"] - r["dema50"]) > atr_mult * r["atr"]:
         return False
     return (not rsi_on) or (r["rsi"] >= rsi_min)
 
 
 def fresh_signals(d: pd.DataFrame, days: int, rsi_on: bool = True,
-                  rsi_min: float = 40.0) -> pd.DataFrame:
+                  rsi_min: float = 40.0,
+                  atr_mult: float = 1.0) -> pd.DataFrame:
     """First-bar-only signals inside the last `days` bars."""
     d = d.copy()
-    sig = pd.Series([setup_row(r, rsi_on, rsi_min) for _, r in d.iterrows()],
-                    index=d.index)
+    sig = pd.Series([setup_row(r, rsi_on, rsi_min, atr_mult)
+                     for _, r in d.iterrows()], index=d.index)
     d["sig"] = sig & ~sig.shift(1, fill_value=False)
     return d.tail(days)
 
@@ -111,7 +113,7 @@ def backtest(d: pd.DataFrame, day, entry: float,
 
 
 def scan(tickers: list, days: int, target: float, rsi_on: bool = True,
-         rsi_min: float = 40.0) -> list:
+         rsi_min: float = 40.0, atr_mult: float = 1.0) -> list:
     """Batched daily fetch, per-ticker signals + backtests. One row/setup."""
     import yfinance as yf
     need = days + 120
@@ -122,12 +124,15 @@ def scan(tickers: list, days: int, target: float, rsi_on: bool = True,
     rows = []
     for t in tickers:
         try:
-            f = px[t] if len(tickers) > 1 else px
+            # multi-ticker fetch lays out (Ticker, Price): select the
+            # ticker level; a flat frame is already one ticker.
+            f = px[t] if isinstance(px.columns, pd.MultiIndex) else px
             f = f.dropna(subset=["Close"])
             f.columns = [str(c).capitalize() for c in f.columns]
             if len(f) < 80:
                 continue
-            d = fresh_signals(add_ind(f), days, rsi_on, rsi_min)
+            d = fresh_signals(add_ind(f), days, rsi_on, rsi_min,
+                              atr_mult)
             for day, r in d[d["sig"]].iterrows():
                 entry = float(r["Close"])
                 b = backtest(d, day, entry, target)
@@ -161,13 +166,15 @@ def main() -> int:
                     default=True, help="RSI14 >= --rsi-min gate")
     ap.add_argument("--rsi-min", type=float, default=40.0,
                     help="RSI floor for the setup")
+    ap.add_argument("--atr-mult", type=float, default=1.0,
+                    help="DEMA50 proximity band in ATRs")
     a = ap.parse_args()
     tickers = [t.upper() for t in a.ticker] if a.ticker \
         else load_pool(a.pool)
     gate = f"rsi>={a.rsi_min:.0f}" if a.rsi else "rsi=off"
     print(f"simple-scan {len(tickers)} names, last {a.days}d, "
           f"target +{a.target * 100:.0f}%, {gate}", flush=True)
-    rows = scan(tickers, a.days, a.target, a.rsi, a.rsi_min)
+    rows = scan(tickers, a.days, a.target, a.rsi, a.rsi_min, a.atr_mult)
     dk = "days_to_%d%%" % int(a.target * 100)
     print(f"{'date':10} {'ticker':6} {'entry':>8} {'dema50':>8} {'atr':>6} "
           f"{'rsi':>5} {dk:>8} {'max%':>7} {'now%':>7}", flush=True)
