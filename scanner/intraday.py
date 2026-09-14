@@ -32,12 +32,18 @@ from backtest_analyzer import rps_live  # noqa: E402  (same code as --algo RPS)
 from combos import add_features  # noqa: E402
 from indicators2 import add_extra  # noqa: E402
 from scan import fmt_row  # noqa: E402  (shared alert text)
+from simple_scan import add_ind as dema_ind  # noqa: E402
+from simple_scan import load_pool, setup_row  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, "scanner", "signal_log.csv")
 WATCH = os.path.join(ROOT, "scanner", "watchlist.csv")
 STATE = os.path.join(ROOT, "scanner", "intraday_state.json")
 # no cap: fixed ETF pool, every open/watchlist name is evaluated
+DEMA_STATE = os.path.join(ROOT, "scanner", "dema_state.json")
+DEMA_RSI_ON, DEMA_RSI_MIN = True, 40.0  # live gate mirrors --rsi defaults
+DEMA_IGNORE_DAYS = 5      # deep-break ignores last this long at most
+DEMA_ALERT_GAP = 3        # re-alert a ticker only after this many days
 
 
 def pt_now():
@@ -188,6 +194,80 @@ def main() -> int:
                               "variant": "rps-2step", "entry": entry,
                               "stop": stop, "target": "-"}), t)
     print(f"intraday RPS: {rps_new} new setups", flush=True)
+    # 1c. DEMA50+RSI40 scan over the spy50+qqq50 union, every run.
+    # Alert only genuinely new triggers: suppressed if alerted within the
+    # last DEMA_ALERT_GAP days. Deep breaks (close < dema50 - 1 ATR) park
+    # the ticker in ignored for DEMA_IGNORE_DAYS or until a close back
+    # over dema50, whichever is sooner.
+    import yfinance as yf
+    dema_new, dema_ign = 0, 0
+    dst = {"alerted": {}, "ignored": {}}
+    if os.path.exists(DEMA_STATE):
+        try:
+            dst.update(json.load(open(DEMA_STATE)))
+        except Exception:
+            pass
+    dst.setdefault("alerted", {})
+    dst.setdefault("ignored", {})
+    today = dt.date.today()
+    pool = sorted(set(load_pool("spy50")) | set(load_pool("qqq50")))
+    try:
+        dd = yf.download(pool, period="90d", interval="1d",
+                         auto_adjust=True, progress=False, threads=True,
+                         group_by="ticker")
+    except Exception:
+        dd = None
+    if dd is not None:
+        for t in pool:
+            try:
+                f = flat(dd[t] if len(pool) > 1 else dd).dropna(
+                    subset=["Close"])
+                f.columns = [str(c).capitalize() for c in f.columns]
+                if len(f) < 70:
+                    continue
+                last = dema_ind(f).iloc[-1]
+            except Exception:
+                continue
+            d50, atr, px = (float(last["dema50"]), float(last["atr"]),
+                            float(last["Close"]))
+            if px < d50 - atr:  # broken too deep: park it
+                dst["ignored"][t] = {
+                    "until": (today + dt.timedelta(
+                        days=DEMA_IGNORE_DAYS)).isoformat()}
+                dema_ign += 1
+                continue
+            if t in dst["ignored"]:
+                try:
+                    over = today > dt.date.fromisoformat(
+                        dst["ignored"][t]["until"])
+                except Exception:
+                    over = True
+                if px > d50 or over:  # recovered or expired: back in list
+                    del dst["ignored"][t]
+                else:
+                    continue
+            if not setup_row(last, DEMA_RSI_ON, DEMA_RSI_MIN):
+                continue
+            prev = dst["alerted"].get(t)
+            if prev is not None:
+                try:
+                    gap = (today - dt.date.fromisoformat(prev)).days
+                except Exception:
+                    gap = DEMA_ALERT_GAP
+                if gap < DEMA_ALERT_GAP:
+                    continue
+            dst["alerted"][t] = today.isoformat()
+            dema_new += 1
+            once(f"dema:{t}:{today.isoformat()}",
+                 f'[SCAN] - {t} LONG - DEMA50+RSI40 pullback - '
+                 f'Entry {px:.2f} - D50 {d50:.2f} - '
+                 f'RSI {float(last["rsi"]):.0f}', t)
+        try:
+            json.dump(dst, open(DEMA_STATE, "w"))
+        except Exception:
+            pass
+    print(f"intraday DEMA: {dema_new} alerts, {dema_ign} ignored",
+          flush=True)
     # 2. open paper signals
     for idx, r in open_tr.iterrows():
         t = r["ticker"]

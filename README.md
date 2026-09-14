@@ -53,14 +53,17 @@ python scanner/backtest_analyzer.py --ticker AAPL --days 20 --algo OLD --score  
 RPS_WASH_LO=40 RPS_WASH_HI=60 python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score  # threshold sweep
 ```
 
-## Simple EMA scanner (pullback to value)
+## Simple DEMA scanner (pullback to value)
 
-Setup: Close below EMA 8/10/21 while within 1xATR of EMA50. Backtest per
-fresh signal (entry = signal-day close): days to +20%, max %, current %.
+Setup: Close below DEMA 8/10/21 while within 1xATR of DEMA50, RSI14 >=
+`--rsi-min` (default 40; `--no-rsi` disables). Backtest per fresh signal
+(entry = signal-day close): days to +20%, max %, current %. Live: intraday
+runs it every 15m over spy50+qqq50 with 3-day alert dedupe and a 5-day /
+recovery ignore list (`scanner/dema_state.json`).
 
 ```
 python scanner/simple_scan.py --ticker NVDA --days 60
-python scanner/simple_scan.py --pool spy50 --days 90 --target 0.20
+python scanner/simple_scan.py --pool spy50 --days 90 --target 0.20 --rsi-min 45
 ```
 
 Pools: sp100 (top-100 S&P weights, proxy), sp500, spy, qqq, spy50, qqq50

@@ -1,7 +1,8 @@
-"""Simple EMA pullback scanner + 20% backtest.
+"""Simple DEMA pullback scanner + 20% backtest.
 
-Setup (daily): Close below EMA 8, 10 AND 21, while within 1xATR of EMA50
-(either side) — price raining under the short trends but sitting on value.
+Setup (daily): Close below DEMA 8, 10 AND 21, while within 1xATR of DEMA50
+(either side) — price raining under the short trends but sitting on value —
+plus RSI14 >= --rsi-min (momentum not dead; --no-rsi disables).
 
 Backtest per fresh signal: enter at the signal-day close (proxy for the
 closing-15m fill — same print), then report days to +target% (default 20%,
@@ -45,24 +46,53 @@ def load_pool(name: str) -> list:
     raise ValueError(f"unknown pool {name}")
 
 
+def dema(s: pd.Series, n: int) -> pd.Series:
+    """Double EMA: 2*EMA(n) - EMA(EMA(n), n). Faster than EMA, less noise."""
+    e1 = s.ewm(span=n, adjust=False).mean()
+    return 2 * e1 - e1.ewm(span=n, adjust=False).mean()
+
+
+def rsi14(close: pd.Series) -> pd.Series:
+    """Wilder RSI14 (flat reads 50, pure-up 100)."""
+    d = close.astype(float).diff()
+    up, dn = d.clip(lower=0.0), -d.clip(upper=0.0)
+    ru = up.ewm(alpha=1.0 / 14, adjust=False).mean()
+    rd = dn.ewm(alpha=1.0 / 14, adjust=False).mean()
+    out = 100.0 - 100.0 / (1.0 + ru / rd.replace(0.0, float("nan")))
+    out = out.fillna(50.0)
+    out.loc[(rd == 0) & (ru > 0)] = 100.0
+    return out
+
+
 def add_ind(d: pd.DataFrame) -> pd.DataFrame:
-    """Daily + EMA8/10/21/50 and Wilder ATR14."""
+    """Daily + DEMA8/10/21/50, RSI14 and Wilder ATR14."""
     d = d.copy()
     c = d["Close"].astype(float)
     for n in (8, 10, 21, 50):
-        d[f"ema{n}"] = c.ewm(span=n, adjust=False).mean()
+        d[f"dema{n}"] = dema(c, n)
+    d["rsi"] = rsi14(c)
     h, l, pc = d["High"].astype(float), d["Low"].astype(float), c.shift(1)
     tr = pd.concat([h - l, (h - pc).abs(), (l - pc).abs()], axis=1).max(axis=1)
     d["atr"] = tr.ewm(alpha=1.0 / 14, adjust=False).mean()
     return d
 
 
-def fresh_signals(d: pd.DataFrame, days: int) -> pd.DataFrame:
+def setup_row(r, rsi_on: bool = True, rsi_min: float = 40.0) -> bool:
+    """One-bar DEMA50+RSI rule (shared by batch scan and live stage)."""
+    if not (r["Close"] < r["dema8"] and r["Close"] < r["dema10"] and
+            r["Close"] < r["dema21"]):
+        return False
+    if abs(r["Close"] - r["dema50"]) > r["atr"]:
+        return False
+    return (not rsi_on) or (r["rsi"] >= rsi_min)
+
+
+def fresh_signals(d: pd.DataFrame, days: int, rsi_on: bool = True,
+                  rsi_min: float = 40.0) -> pd.DataFrame:
     """First-bar-only signals inside the last `days` bars."""
     d = d.copy()
-    sig = (d["Close"] < d["ema8"]) & (d["Close"] < d["ema10"]) & \
-        (d["Close"] < d["ema21"]) & \
-        ((d["Close"] - d["ema50"]).abs() <= d["atr"])
+    sig = pd.Series([setup_row(r, rsi_on, rsi_min) for _, r in d.iterrows()],
+                    index=d.index)
     d["sig"] = sig & ~sig.shift(1, fill_value=False)
     return d.tail(days)
 
@@ -80,7 +110,8 @@ def backtest(d: pd.DataFrame, day, entry: float,
             "now": float(fwd["Close"].astype(float).iloc[-1] / entry - 1.0)}
 
 
-def scan(tickers: list, days: int, target: float) -> list:
+def scan(tickers: list, days: int, target: float, rsi_on: bool = True,
+         rsi_min: float = 40.0) -> list:
     """Batched daily fetch, per-ticker signals + backtests. One row/setup."""
     import yfinance as yf
     need = days + 120
@@ -96,15 +127,16 @@ def scan(tickers: list, days: int, target: float) -> list:
             f.columns = [str(c).capitalize() for c in f.columns]
             if len(f) < 80:
                 continue
-            d = fresh_signals(add_ind(f), days)
+            d = fresh_signals(add_ind(f), days, rsi_on, rsi_min)
             for day, r in d[d["sig"]].iterrows():
                 entry = float(r["Close"])
                 b = backtest(d, day, entry, target)
                 rows.append({
                     "date": day.date().isoformat(), "ticker": t,
                     "entry": round(entry, 2),
-                    "ema50": round(float(r["ema50"]), 2),
+                    "dema50": round(float(r["dema50"]), 2),
                     "atr": round(float(r["atr"]), 2),
+                    "rsi": round(float(r["rsi"]), 1),
                     "days_to_%d%%" % int(target * 100):
                         b["days"] if b["days"] is not None else "never",
                     "max%": round(b["max"] * 100, 1),
@@ -125,18 +157,23 @@ def main() -> int:
                     help="signal window (trailing daily bars)")
     ap.add_argument("--target", type=float, default=0.20,
                     help="profit target fraction (0.20 = +20%)")
+    ap.add_argument("--rsi", action=argparse.BooleanOptionalAction,
+                    default=True, help="RSI14 >= --rsi-min gate")
+    ap.add_argument("--rsi-min", type=float, default=40.0,
+                    help="RSI floor for the setup")
     a = ap.parse_args()
     tickers = [t.upper() for t in a.ticker] if a.ticker \
         else load_pool(a.pool)
+    gate = f"rsi>={a.rsi_min:.0f}" if a.rsi else "rsi=off"
     print(f"simple-scan {len(tickers)} names, last {a.days}d, "
-          f"target +{a.target * 100:.0f}%", flush=True)
-    rows = scan(tickers, a.days, a.target)
+          f"target +{a.target * 100:.0f}%, {gate}", flush=True)
+    rows = scan(tickers, a.days, a.target, a.rsi, a.rsi_min)
     dk = "days_to_%d%%" % int(a.target * 100)
-    print(f"{'date':10} {'ticker':6} {'entry':>8} {'ema50':>8} {'atr':>6} "
-          f"{dk:>8} {'max%':>7} {'now%':>7}", flush=True)
+    print(f"{'date':10} {'ticker':6} {'entry':>8} {'dema50':>8} {'atr':>6} "
+          f"{'rsi':>5} {dk:>8} {'max%':>7} {'now%':>7}", flush=True)
     for r in sorted(rows, key=lambda r: (r["date"], r["ticker"])):
         print(f'{r["date"]:10} {r["ticker"]:6} {r["entry"]:8.2f} '
-              f'{r["ema50"]:8.2f} {r["atr"]:6.2f} '
+              f'{r["dema50"]:8.2f} {r["atr"]:6.2f} {r["rsi"]:5.1f} '
               f'{str(r[dk]):>8} {r["max%"]:7.1f} {r["now%"]:7.1f}',
               flush=True)
     hit = [r for r in rows if r[dk] != "never"]
