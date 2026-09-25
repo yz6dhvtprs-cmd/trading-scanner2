@@ -28,6 +28,7 @@ from combos import add_features, level_of, pick, risk_of, signal_mask  # noqa: E
 from indicators2 import add_extra, alignment  # noqa: E402
 from notify import alert, load_config  # noqa: E402
 from backtest_analyzer import rps_live  # noqa: E402  (same RPS code as --algo RPS)
+from market_calendar import afterhours  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, "scanner", "signal_log.csv")
@@ -349,8 +350,11 @@ def main() -> int:
                     parts.append("DROPPED " + ", ".join(dropped))
                 wmsg = f"WATCH delta: {'; '.join(parts)} ({len(cur)} tracked)"
             print(wmsg, flush=True)
-            for res in alert(wmsg, chans, cfg, title="Watchlist"):
-                print("  ", res)
+            if afterhours():
+                print("   (afterhours: logged, no text)", flush=True)
+            else:
+                for res in alert(wmsg, chans, cfg, title="Watchlist"):
+                    print("  ", res)
 
     for r in rows:
         msg = fmt_row(r) + tag(r["ticker"])

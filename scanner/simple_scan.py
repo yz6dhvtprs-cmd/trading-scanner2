@@ -2,9 +2,8 @@
 
 Setup (daily): Close below EMA 8, 13 AND 21, while within 1xATR of EMA50
 (either side) — price raining under the short trends but sitting on value —
-plus RSI14 from --rsi-target up to --rsi-target + --rsi-tol (default
-40 to 42: pullback to neutral, neither hot nor dead; --no-rsi disables)
-AND as-of weekly RSI14
+plus RSI14 from --rsi-target to --rsi-max (default 40 to 45;
+--no-rsi disables) AND as-of weekly RSI14
 above --wrsi-min (default 55: the pullback sits inside a weekly uptrend).
 The previous daily close must still have been strictly above EMA50 — first
 touch of value only, not names camped under the line.
@@ -17,6 +16,8 @@ FIRST bar of each consecutive run counts (no overlapping entries).
 The `page` column mirrors the live 3-trading-day alert dedupe: Y means
 live would have paged it, - means suppressed (signaled within 3 trading
 sessions of the previous signal). Backtest stats still count every row.
+`pslack`/`rslack` are the weakest-gate margins (price gates in ATRs, RSI
+gates in points) — near-zero means any data wobble flips the row.
 
 Usage:
     python scanner/simple_scan.py --ticker NVDA --days 60
@@ -128,7 +129,7 @@ def add_ind(d: pd.DataFrame) -> pd.DataFrame:
 
 
 def setup_row(r, rsi_on: bool = True, rsi_target: float = 40.0,
-              rsi_tol: float = 2.0, atr_mult: float = 1.0,
+              rsi_max: float = 45.0, atr_mult: float = 1.0,
               wrsi_min: float = 55.0, prev_close=None,
               today_open=None) -> bool:
     """One-bar EMA50+RSI rule (shared by batch scan and live stage). Daily
@@ -147,19 +148,18 @@ def setup_row(r, rsi_on: bool = True, rsi_target: float = 40.0,
         return False
     if not rsi_on:
         return True
-    return rsi_target <= r["rsi"] <= rsi_target + rsi_tol \
-        and r["wrsi"] > wrsi_min
+    return rsi_target <= r["rsi"] <= rsi_max and r["wrsi"] > wrsi_min
 
 
 def fresh_signals(d: pd.DataFrame, days: int, rsi_on: bool = True,
-                  rsi_target: float = 40.0, rsi_tol: float = 2.0,
+                  rsi_target: float = 40.0, rsi_max: float = 45.0,
                   atr_mult: float = 1.0,
                   wrsi_min: float = 55.0) -> pd.DataFrame:
     """First-bar-only signals inside the last `days` bars."""
     d = d.copy()
     closes = d["Close"].tolist()
     opens = d["Open"].tolist()
-    sig = pd.Series([setup_row(r, rsi_on, rsi_target, rsi_tol, atr_mult,
+    sig = pd.Series([setup_row(r, rsi_on, rsi_target, rsi_max, atr_mult,
                                wrsi_min, prev, opn)
                      for (_, r), prev, opn in zip(d.iterrows(),
                                                   [None] + closes[:-1],
@@ -167,6 +167,153 @@ def fresh_signals(d: pd.DataFrame, days: int, rsi_on: bool = True,
                     index=d.index)
     d["sig"] = sig & ~sig.shift(1, fill_value=False)
     return d.tail(days)
+
+
+def gate_slack(r, prev_close, today_open, rsi_target: float = 40.0,
+              rsi_max: float = 45.0, atr_mult: float = 1.0,
+              wrsi_min: float = 55.0) -> tuple:
+    """Weakest-gate margins for a row setup_row accepted: price slack in
+    ATRs (min over short-EMA distances, value band, prev-close and open
+    distances above EMA50) and RSI slack in points (min over daily-band
+    edges and weekly floor). Near-zero = margin call: any data wobble
+    flips it, so read small slacks as weak, not wrong."""
+    atr = float(r["atr"])
+    pslack = min(float(r["ema8"]) - float(r["Close"]),
+                 float(r["ema13"]) - float(r["Close"]),
+                 float(r["ema21"]) - float(r["Close"]),
+                 atr_mult * atr - abs(float(r["Close"]) - float(r["ema50"])),
+                 float(prev_close) - float(r["ema50"]),
+                 float(today_open) - float(r["ema50"])) / atr
+    rslack = min(float(r["rsi"]) - rsi_target,
+                 rsi_max - float(r["rsi"]),
+                 float(r["wrsi"]) - wrsi_min)
+    return round(pslack, 2), round(rslack, 1)
+
+
+def drop_forming(d: pd.DataFrame, today=None) -> pd.DataFrame:
+    """Drop bars dated today-or-later (still forming). Shared by batch,
+    replay and live so all three evaluate the same completed bars."""
+    today = today or dt.date.today()
+    return d[d.index.date < today]
+
+
+def rsi_window_pass(close: pd.Series, n_bars: int, lo: float,
+                    hi: float) -> bool:
+    """True if RSI14 lands in [lo, hi] on any of the last `n_bars` closes.
+    Cheap AND-filter prefilter: closes only, no EMAs, no weekly loop. A
+    ticker that never enters the band cannot signal, so prefiltering loses
+    nothing — the full gate still rechecks survivors exactly."""
+    if len(close) < 20:
+        return False
+    r = rsi14(close.astype(float)).tail(n_bars)
+    return bool(((r >= lo) & (r <= hi)).any())
+
+
+def _present(px, t) -> bool:
+    """True if a batch frame actually holds usable closes for `t`."""
+    try:
+        if px is None or len(px) == 0:
+            return False
+        f = px[t] if isinstance(px.columns, pd.MultiIndex) else px
+        col = "Close" if "Close" in f.columns else (
+            "close" if "close" in f.columns else None)
+        if col is None:
+            return False
+        c = f[col]
+        if isinstance(c, pd.DataFrame):
+            c = c.iloc[:, 0]
+        return bool((c.notna() & (c != 0)).any())
+    except Exception:
+        return False
+
+
+def batched_download(tickers: list, period: str, interval: str = "1d",
+                     chunk: int = 100, pause: float = 1.0,
+                     timeout: float = 20, downloader=None):
+    """Chunked yfinance batch fetch with a serial retry for misses.
+
+    One 517-ticker yf.download fans out into hundreds of threads: Yahoo
+    throttles most of them (surfaced as 'possibly delisted; no price
+    data') and the tz-cache sqlite db chokes under concurrent writers
+    (OperationalError: unable to open database file). Fetching in
+    ~100-ticker chunks with a short pause, then re-fetching just the
+    misses serially, recovers both failure modes. Returns one combined
+    frame shaped like yf.download(group_by='ticker') (flat for a single
+    ticker), or None when nothing came back.
+    """
+    import time
+    tickers = list(dict.fromkeys(tickers))
+    if not tickers:
+        return None
+    import yfinance as yf
+
+    def fetch(ts, serial=False):
+        kw = dict(period=period, interval=interval, auto_adjust=True,
+                  progress=False, threads=not serial, group_by="ticker",
+                  timeout=timeout if serial else 10)
+        if downloader is not None:
+            return downloader(ts, **kw)
+        return yf.download(ts, **kw)
+
+    def normalize(px, ts):
+        if px is None or len(px) == 0:
+            return None
+        if (not isinstance(px.columns, pd.MultiIndex) and len(ts) == 1
+                and len(tickers) > 1):
+            px = px.copy()
+            px.columns = pd.MultiIndex.from_product([ts, px.columns])
+        return px
+
+    frames: list = []
+    have: set = set()
+    groups = [tickers[i:i + chunk] for i in range(0, len(tickers), chunk)]
+    for i, g in enumerate(groups):
+        if i:
+            time.sleep(pause)
+        try:
+            px = normalize(fetch(g), g)
+        except Exception:
+            px = None
+        if px is not None:
+            frames.append(px)
+            for t in g:
+                if _present(px, t):
+                    have.add(t)
+    missing = [t for t in tickers if t not in have]
+    if missing:
+        time.sleep(pause)
+        for i in range(0, len(missing), 25):
+            g = missing[i:i + 25]
+            if i:
+                time.sleep(pause)
+            try:
+                px = normalize(fetch(g, serial=True), g)
+            except Exception:
+                px = None
+            if px is not None:
+                frames.append(px)
+                for t in g:
+                    if _present(px, t):
+                        have.add(t)
+    if not frames:
+        return None
+    if len(tickers) == 1:
+        return frames[0]
+    try:
+        out = pd.concat(frames, axis=1)
+        out = out.loc[:, ~out.columns.duplicated(keep="last")]
+        return out.sort_index()
+    except Exception:
+        return max(frames, key=len)
+
+
+def _frame(px, t):
+    """Normalized daily frame for one ticker: selects the ticker level,
+    drops empty closes, capitalizes columns, drops forming bars."""
+    f = px[t] if isinstance(px.columns, pd.MultiIndex) else px
+    f = f.dropna(subset=["Close"])
+    f.columns = [str(c).capitalize() for c in f.columns]
+    return drop_forming(f)
 
 
 PAGE_GAP = 3  # signals within this many trading sessions of the
@@ -200,7 +347,7 @@ def backtest(d: pd.DataFrame, day, entry: float,
 
 
 def live_sim(d: pd.DataFrame, eval_days: list, rsi_on: bool = True,
-             rsi_target: float = 40.0, rsi_tol: float = 2.0,
+             rsi_target: float = 40.0, rsi_max: float = 45.0,
              atr_mult: float = 1.0, ignore_days: int = 5,
              wrsi_min: float = 55.0) -> list:
     """Replay the live EMA stage over `eval_days` (calendar dates ascending,
@@ -232,60 +379,89 @@ def live_sim(d: pd.DataFrame, eval_days: list, rsi_on: bool = True,
             if px > d50 or D > ignored_until:  # recovered or expired
                 ignored_until = None
             else:
-                if setup_row(r, rsi_on, rsi_target, rsi_tol, atr_mult,
+                if setup_row(r, rsi_on, rsi_target, rsi_max, atr_mult,
                                wrsi_min, prev, opn):
+                    ps, rs = gate_slack(r, prev, opn, rsi_target, rsi_max,
+                                        atr_mult, wrsi_min)
                     rows.append(_row(D, day, r, "MUTED-IGNORE",
-                                     f"parked till {ignored_until}"))
+                                     f"parked till {ignored_until}", ps, rs))
                 continue
-        if not setup_row(r, rsi_on, rsi_target, rsi_tol, atr_mult,
+        if not setup_row(r, rsi_on, rsi_target, rsi_max, atr_mult,
                          wrsi_min, prev, opn):
             continue
+        ps, rs = gate_slack(r, prev, opn, rsi_target, rsi_max,
+                            atr_mult, wrsi_min)
         if alerted is not None and trading_gap(alerted, D) <= PAGE_GAP:
             rows.append(_row(D, day, r, "MUTED-DEDUP",
-                             f"paged {alerted}"))
+                             f"paged {alerted}", ps, rs))
             continue
         alerted = D
-        rows.append(_row(D, day, r, "PAGED", "text would go out"))
+        rows.append(_row(D, day, r, "PAGED", "text would go out", ps, rs))
     return rows
 
 
-def _row(D, day, r, status: str, detail: str) -> dict:
+def _row(D, day, r, status: str, detail: str, ps=None, rs=None) -> dict:
     return {"text": D.isoformat(), "bar": day.date().isoformat(),
             "entry": round(float(r["Close"]), 2),
             "ema50": round(float(r["ema50"]), 2),
             "atr": round(float(r["atr"]), 2),
             "rsi": round(float(r["rsi"]), 1),
             "wrsi": round(float(r["wrsi"]), 1),
+            "pslack": ps, "rslack": rs,
             "status": status, "detail": detail}
 
 
 def scan(tickers: list, days: int, target: float, rsi_on: bool = True,
-         rsi_target: float = 40.0, rsi_tol: float = 2.0,
+         rsi_target: float = 40.0, rsi_max: float = 45.0,
          atr_mult: float = 1.0, wrsi_min: float = 55.0) -> list:
-    """Batched daily fetch, per-ticker signals + backtests. One row/setup."""
-    import yfinance as yf
-    need = days + 150  # headroom: EMA50 convergence + ~14wk weekly-RSI ramp
+    """Batched daily fetch, per-ticker signals + backtests. One row/setup.
+
+    Staged funnel: a small short fetch first keeps only tickers whose RSI
+    touched the band anywhere in the window (an AND-filter: the rest cannot
+    signal); the 1y fetch + full indicators run on survivors only.
+    """
+    try:
+        short = batched_download(tickers, period=f"{days + 40}d",
+                                 interval="1d")
+    except Exception:
+        short = None
+    pre = list(tickers)
+    if short is not None:
+        pre = []
+        for t in tickers:
+            try:
+                f = _frame(short, t)
+                if rsi_window_pass(f["Close"], days, rsi_target, rsi_max):
+                    pre.append(t)
+            except Exception:
+                continue
+        if not pre:
+            return []
+    # 1y floor: indicator warmup (EMA50 + weekly RSI) must match live no
+    # matter how short the report window is; forming bars (>= today) are
+    # dropped like the live stage drops them.
+    need = max(days + 150, 365)
     period = f"{need}d" if need <= 720 else "5y"
-    px = yf.download(tickers, period=period, interval="1d",
-                     auto_adjust=True, progress=False, threads=True,
-                     group_by="ticker")
+    px = batched_download(pre, period=period, interval="1d")
     rows = []
-    for t in tickers:
+    for t in pre:
         try:
-            # multi-ticker fetch lays out (Ticker, Price): select the
-            # ticker level; a flat frame is already one ticker.
-            f = px[t] if isinstance(px.columns, pd.MultiIndex) else px
-            f = f.dropna(subset=["Close"])
-            f.columns = [str(c).capitalize() for c in f.columns]
+            f = _frame(px, t)
             if len(f) < 80:
                 continue
             d = fresh_signals(add_ind(f), days, rsi_on, rsi_target,
-                              rsi_tol, atr_mult, wrsi_min)
+                              rsi_max, atr_mult, wrsi_min)
             sigd = d[d["sig"]]
+            closes = d["Close"].tolist()
+            opens = d["Open"].tolist()
             locs = [d.index.get_loc(i) for i in sigd.index]
-            for (day, r), page in zip(sigd.iterrows(), mark_pages(locs)):
+            for (day, r), loc, page in zip(sigd.iterrows(), locs,
+                                           mark_pages(locs)):
                 entry = float(r["Close"])
                 b = backtest(d, day, entry, target)
+                prev = closes[loc - 1] if loc >= 1 else float("nan")
+                ps, rs = gate_slack(r, prev, opens[loc], rsi_target,
+                                    rsi_max, atr_mult, wrsi_min)
                 rows.append({
                     "date": day.date().isoformat(), "ticker": t,
                     "entry": round(entry, 2),
@@ -293,6 +469,7 @@ def scan(tickers: list, days: int, target: float, rsi_on: bool = True,
                     "atr": round(float(r["atr"]), 2),
                     "rsi": round(float(r["rsi"]), 1),
                     "wrsi": round(float(r["wrsi"]), 1),
+                    "pslack": ps, "rslack": rs,
                     "days_to_%d%%" % int(target * 100):
                         b["days"] if b["days"] is not None else "never",
                     "max%": round(b["max"] * 100, 1),
@@ -304,7 +481,7 @@ def scan(tickers: list, days: int, target: float, rsi_on: bool = True,
 
 
 def simulate(tickers: list, days: int, rsi_on: bool = True,
-             rsi_target: float = 40.0, rsi_tol: float = 2.0,
+             rsi_target: float = 40.0, rsi_max: float = 45.0,
              atr_mult: float = 1.0, ignore_days: int = 5,
              wrsi_min: float = 55.0) -> list:
     """Live-paging replay per ticker over the last `days` calendar days.
@@ -314,19 +491,14 @@ def simulate(tickers: list, days: int, rsi_on: bool = True,
     so parks/pages just outside it still mute inside it. Text-days run
     through today so the freshest bar is evaluated.
     """
-    import yfinance as yf
-    need = days + 300
+    need = max(days + 300, 365)  # same 1y warmup floor as scan()
     period = f"{need}d" if need <= 720 else "5y"
-    px = yf.download(tickers, period=period, interval="1d",
-                     auto_adjust=True, progress=False, threads=True,
-                     group_by="ticker")
+    px = batched_download(tickers, period=period, interval="1d")
     rows = []
     end = dt.date.today()
     for t in tickers:
         try:
-            f = px[t] if isinstance(px.columns, pd.MultiIndex) else px
-            f = f.dropna(subset=["Close"])
-            f.columns = [str(c).capitalize() for c in f.columns]
+            f = _frame(px, t)
             if len(f) < 80:
                 continue
             d = add_ind(f)
@@ -339,7 +511,7 @@ def simulate(tickers: list, days: int, rsi_on: bool = True,
             while day <= stop:
                 eval_days.append(day)
                 day += dt.timedelta(days=1)
-            for r in live_sim(d, eval_days, rsi_on, rsi_target, rsi_tol,
+            for r in live_sim(d, eval_days, rsi_on, rsi_target, rsi_max,
                               atr_mult, ignore_days, wrsi_min):
                 if dt.date.fromisoformat(r["text"]) > floor:
                     r["ticker"] = t
@@ -351,18 +523,19 @@ def simulate(tickers: list, days: int, rsi_on: bool = True,
 
 def run_simulate(tickers: list, a) -> int:
     print(f"live-replay {len(tickers)} names, last {a.days}d, "
-          f"{'rsi=%g+%g wrsi>%g' % (a.rsi_target, a.rsi_tol, a.wrsi_min)
+          f"{'rsi=%g-%g wrsi>%g' % (a.rsi_target, a.rsi_max, a.wrsi_min)
              if a.rsi else 'rsi=off'}",
           flush=True)
-    rows = simulate(tickers, a.days, a.rsi, a.rsi_target, a.rsi_tol,
+    rows = simulate(tickers, a.days, a.rsi, a.rsi_target, a.rsi_max,
                     a.atr_mult, 5, a.wrsi_min)
     print(f"{'text':10} {'bar':10} {'ticker':6} {'entry':>8} {'ema50':>8} "
-          f"{'atr':>6} {'rsi':>5} {'wrsi':>5} {'status':>11} detail",
-          flush=True)
+          f"{'atr':>6} {'rsi':>5} {'wrsi':>5} {'pslack':>6} {'rslack':>6} "
+          f"{'status':>11} detail", flush=True)
     for r in sorted(rows, key=lambda r: (r["text"], r["ticker"])):
         print(f'{r["text"]:10} {r["bar"]:10} {r["ticker"]:6} '
               f'{r["entry"]:8.2f} {r["ema50"]:8.2f} {r["atr"]:6.2f} '
               f'{r["rsi"]:5.1f} {r["wrsi"]:5.1f} '
+              f'{r["pslack"]:6.2f} {r["rslack"]:6.1f} '
               f'{r["status"]:>11} {r["detail"]}', flush=True)
     n = lambda s: sum(1 for r in rows if r["status"] == s)
     print(f"paged={n('PAGED')} muted-ignore={n('MUTED-IGNORE')} "
@@ -385,9 +558,9 @@ def main() -> int:
     ap.add_argument("--rsi", action=argparse.BooleanOptionalAction,
                     default=True, help="RSI14 inside target band gate")
     ap.add_argument("--rsi-target", type=float, default=40.0,
-                    help="RSI band center for the setup")
-    ap.add_argument("--rsi-tol", type=float, default=2.0,
-                    help="RSI band upper extension (target to target+tol)")
+                    help="RSI floor for the setup")
+    ap.add_argument("--rsi-max", type=float, default=45.0,
+                    help="RSI ceiling for the setup")
     ap.add_argument("--atr-mult", type=float, default=1.0,
                     help="EMA50 proximity band in ATRs")
     ap.add_argument("--wrsi-min", type=float, default=55.0,
@@ -403,22 +576,22 @@ def main() -> int:
             tickers = load_pools(a.pool)
         except ValueError as e:
             ap.error(str(e))
-    gate = f"rsi={a.rsi_target:.0f}+{a.rsi_tol:.0f} wrsi>{a.wrsi_min:.0f}" \
-        if a.rsi else "rsi=off"
+    gate = f"rsi={a.rsi_target:.0f}-{a.rsi_max:.0f} " \
+           f"wrsi>{a.wrsi_min:.0f}" if a.rsi else "rsi=off"
     if a.simulate:
         return run_simulate(tickers, a)
     print(f"simple-scan {len(tickers)} names, last {a.days}d, "
           f"target +{a.target * 100:.0f}%, {gate}", flush=True)
     rows = scan(tickers, a.days, a.target, a.rsi, a.rsi_target,
-                a.rsi_tol, a.atr_mult, a.wrsi_min)
+                a.rsi_max, a.atr_mult, a.wrsi_min)
     dk = "days_to_%d%%" % int(a.target * 100)
     print(f"{'date':10} {'ticker':6} {'entry':>8} {'ema50':>8} {'atr':>6} "
-          f"{'rsi':>5} {'wrsi':>5} {dk:>8} {'max%':>7} {'now%':>7} {'page':>4}",
-          flush=True)
+          f"{'rsi':>5} {'wrsi':>5} {'pslack':>6} {'rslack':>6} {dk:>8} "
+          f"{'max%':>7} {'now%':>7} {'page':>4}", flush=True)
     for r in sorted(rows, key=lambda r: (r["date"], r["ticker"])):
         print(f'{r["date"]:10} {r["ticker"]:6} {r["entry"]:8.2f} '
               f'{r["ema50"]:8.2f} {r["atr"]:6.2f} {r["rsi"]:5.1f} '
-              f'{r["wrsi"]:5.1f} '
+              f'{r["wrsi"]:5.1f} {r["pslack"]:6.2f} {r["rslack"]:6.1f} '
               f'{str(r[dk]):>8} {r["max%"]:7.1f} {r["now%"]:7.1f} '
               f'{r["page"]:>4}', flush=True)
     hit = [r for r in rows if r[dk] != "never"]

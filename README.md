@@ -56,8 +56,7 @@ RPS_WASH_LO=40 RPS_WASH_HI=60 python scanner/backtest_analyzer.py --ticker AAPL 
 ## Simple EMA scanner (pullback to value)
 
 Setup: Close below EMA 8/13/21 while within 1xATR of EMA50, RSI14 from
-`--rsi-target` to `--rsi-target` + `--rsi-tol` (default 40 to 42;
-`--no-rsi` disables),
+`--rsi-target` to `--rsi-max` (default 40 to 45; `--no-rsi` disables),
 plus as-of weekly RSI14 above `--wrsi-min` (default 55: daily pullback
 inside a weekly uptrend; weekly value uses completed Friday weeks plus the
 bar's own close as the forming week, same as a live chart). The previous
@@ -65,21 +64,81 @@ daily close and today's open must both have printed strictly above EMA50
 (first touch only, no gap-unders).
 Backtest per fresh signal (entry = signal-day close): days to +20%, max %,
 current %, plus a `page` column (Y = live would page it, - = muted by the
-3-trading-day dedupe). Live: intraday runs it every 15m over spy50+qqq50
+3-trading-day dedupe). Live: intraday runs it every 15m over spy+qqq
 with 3-trading-day alert dedupe and a 5-trading-day / recovery ignore list
-(`scanner/ema_state.json`). `--simulate` replays the exact live rules over
+(`scanner/ema_state.json`), over the full spy+qqq union. Both batch and
+live run a staged funnel — 60d RSI prefilter on the full pool, then the 1y
+fetch plus full indicators on survivors only (same signals, ~3x faster).
+`--simulate` replays the exact live rules over
 history — forming-bar drop, 5-trading-day parks, 3-session dedupe — and
-prints what would have paged vs muted with reasons:
+prints what would have paged vs muted with reasons. Both tables carry
+`pslack`/`rslack` weakest-gate margins (ATRs / RSI points): near-zero rows
+are margin calls that any data wobble can flip:
 
 ```
 python scanner/simple_scan.py --ticker NVDA --days 60
-python scanner/simple_scan.py --pool spy50 --days 90 --target 0.20 --rsi-target 40 --rsi-tol 2
+python scanner/simple_scan.py --pool spy+qqq --days 60
+python scanner/simple_scan.py --pool spy50 --days 90 --target 0.20 --rsi-target 40
 python scanner/simple_scan.py --pool spy50 --days 60 --simulate
 ```
 
 Pools: sp100 (top-100 S&P weights, proxy), sp500, spy, qqq, spy50, qqq50
 (weight-ranked, SlickCharts 09-2026, baked into `universe/*_w.csv`);
-`--pool` also takes `+` unions like `spy50+qqq50`.
+`--pool` also takes `+` unions like `spy+qqq` (full 517-name union, live default).
+
+Live intraday (every 15m, 06:30–13:00 PT) runs the same gates plus a
+live-touch pass: names in the daily RSI band are re-checked against the
+live print, so a touch of EMA50 at 10am pages at 10:15 instead of the
+next morning (daily and live pages share one 3-day dedupe clock). Each
+run sends at most one batched text:
+
+```
+D_RSI 40-45, WRSI>55, EMA50
+XYZ
+PQR
+```
+
+## Local bar cache (1d/1w/1h, no re-downloads)
+
+Completed bars are stored per ticker under
+`scanner/{daily_cache,weekly_cache,hourly_cache}/` (gitignored) and
+refreshed incrementally — the 15-min loop pays network once a day, and
+the batch tools reuse the chunked downloader with serial retry. Check
+health, backfill, or top up per timeframe:
+
+```
+python scanner/daily_cache.py --tf 1d --status
+python scanner/daily_cache.py --tf 1w --bootstrap
+python scanner/daily_cache.py --tf 1h --refresh
+python scanner/daily_cache.py --tf 1h --bootstrap
+```
+
+EMA/RSI/ATR are recomputed from local bars (stateless; splits and
+revisions can't corrupt it). Incremental indicator state was considered
+and rejected — see PENDING.md.
+
+## Consolidation detector (reusable, any ticker/timeframe)
+
+A-range gate (box width in ATRs) + E-drift veto (slope/residual), with
+B close-clustering reported as a confirm flag for the alert line.
+Returns boundaries + run length. Manual chart-check harness:
+
+```
+python scanner/consolidation.py --ticker NVDA --days 10
+python scanner/consolidation.py --ticker AAPL --ticker MSFT --days 20 --tf 1d,1w
+python scanner/consolidation.py --ticker NVDA --days 5 --tf 1h --n 4 --width 1.0 --slope 0.10 --resid 0.50 --b-pct 0.5
+```
+
+## Tests (all offline)
+
+```
+python scanner/test_consolidation.py   # 7: gates, veto, B divergence, run grouping
+python scanner/test_daily_cache.py     # 11: rotation, forming bars, resync, timeframes, tz
+python scanner/test_simple_scan.py     # 24: gates, pages, replay
+python scanner/test_intraday.py        # 12: batch text, live-touch branches
+python scanner/test_market_calendar.py # 7
+python scanner/test_inbox.py           # inbox replay
+```
 
 ## Gate before live
 

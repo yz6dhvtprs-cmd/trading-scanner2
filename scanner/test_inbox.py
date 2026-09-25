@@ -157,6 +157,13 @@ def main() -> int:
         _age_done(st_path)
         _run(_inbox)
         check("post-stop-silence", len(sent) == n8 + 1, f"sent={len(sent)}")
+
+        # 10. bystander "STOP ..." is not a command: no reply, no state
+        _add(con, "STOP by the store later")
+        _run(_inbox)
+        check("bystander-no-reply", len(sent) == n8 + 1,
+              f"sent={len(sent)}")
+        check("bystander-stays-out", NUM not in cfg()["sms_to"])
     finally:
         (_inbox.CHATDB, _inbox.CONFIG, _inbox.ISTATE, _notify.CONFIG,
          _notify.send_smart) = old

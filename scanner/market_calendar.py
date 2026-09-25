@@ -88,6 +88,16 @@ def add_trading_days(day: dt.date, n: int) -> dt.date:
     return d
 
 
+def afterhours(now: dt.datetime | None = None) -> bool:
+    """True outside the 06:30-13:00 PT session window or on closed days.
+    PT wall clock, matching the runner's intraday gate."""
+    now = now or dt.datetime.now(dt.timezone(dt.timedelta(hours=-7)))
+    if not is_open(now.date()):
+        return True
+    mins = now.hour * 60 + now.minute
+    return mins < 6 * 60 + 30 or mins > 13 * 60
+
+
 def main() -> int:
     arg = sys.argv[1] if len(sys.argv) > 1 else dt.date.today().isoformat()
     day = dt.date.fromisoformat(arg)

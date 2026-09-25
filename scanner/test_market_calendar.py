@@ -15,7 +15,23 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from market_calendar import add_trading_days, trading_gap
+from market_calendar import add_trading_days, afterhours, trading_gap
+
+
+def _pt(month: int, day: int, h: int, mi: int):
+    pt = dt.timezone(dt.timedelta(hours=-7))
+    return dt.datetime(2026, month, day, h, mi, tzinfo=pt)
+
+
+def test_afterhours():
+    assert afterhours(_pt(9, 14, 10, 0)) is False   # Mon session
+    assert afterhours(_pt(9, 14, 6, 30)) is False   # open boundary sends
+    assert afterhours(_pt(9, 14, 13, 0)) is False   # close boundary sends
+    assert afterhours(_pt(9, 16, 6, 9)) is True     # premarket run: muted
+    assert afterhours(_pt(9, 14, 13, 1)) is True    # past close: muted
+    assert afterhours(_pt(9, 14, 14, 5)) is True    # nightly run: muted
+    assert afterhours(_pt(9, 13, 10, 0)) is True    # Sunday
+    assert afterhours(_pt(9, 7, 10, 0)) is True     # Labor Day
 
 
 def test_same_day_is_zero():

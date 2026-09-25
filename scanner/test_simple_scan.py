@@ -9,6 +9,7 @@ Usage (project root, venv active):
 """
 from __future__ import annotations
 
+import math
 import os
 import sys
 
@@ -16,8 +17,10 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from simple_scan import add_ind, ema, fresh_signals, live_sim, mark_pages
-from simple_scan import load_pool, load_pools, setup_row
+from simple_scan import add_ind, batched_download, drop_forming, ema
+from simple_scan import fresh_signals, gate_slack
+from simple_scan import live_sim, mark_pages
+from simple_scan import load_pool, load_pools, rsi_window_pass, setup_row
 
 
 def row(close=100.0, e8=101.0, e13=102.0, e21=103.0, e50=100.5,
@@ -50,13 +53,12 @@ def test_valid_bar():
     assert prv(row()) is True
 
 
-def test_rsi_band_edges():
+def test_rsi_band_40_45():
     assert prv(row(rsi=40.0)) is True   # floor inclusive
-    assert prv(row(rsi=42.0)) is True   # ceiling inclusive
-    assert prv(row(rsi=39.9)) is False  # below target: no -2 side
-    assert prv(row(rsi=38.0)) is False
-    assert prv(row(rsi=42.1)) is False
-    assert prv(row(rsi=61.5)) is False  # hot: not a 40-zone pullback
+    assert prv(row(rsi=45.0)) is True   # ceiling inclusive
+    assert prv(row(rsi=39.9)) is False
+    assert prv(row(rsi=45.1)) is False
+    assert prv(row(rsi=61.5)) is False  # hot excluded again
 
 
 def test_rsi_off():
@@ -95,10 +97,10 @@ def test_weekly_rsi_forming_week_moves_same_day():
 
 
 def test_custom_band():
-    assert prv(row(rsi=50.0), rsi_target=50.0, rsi_tol=2.0) is True
-    assert prv(row(rsi=52.0), rsi_target=50.0, rsi_tol=2.0) is True
-    assert prv(row(rsi=49.9), rsi_target=50.0, rsi_tol=2.0) is False
-    assert prv(row(rsi=52.1), rsi_target=50.0, rsi_tol=2.0) is False
+    assert prv(row(rsi=50.0), rsi_target=50.0, rsi_max=55.0) is True
+    assert prv(row(rsi=55.0), rsi_target=50.0, rsi_max=55.0) is True
+    assert prv(row(rsi=49.9), rsi_target=50.0, rsi_max=55.0) is False
+    assert prv(row(rsi=55.1), rsi_target=50.0, rsi_max=55.0) is False
 
 
 def test_short_trend_gate():
@@ -151,6 +153,38 @@ def test_fresh_first_bar_only():
     assert len(hits) == 1 and hits[0] == sig.index[-3]
 
 
+def test_gate_slack():
+    # row(): close 100, shorts 101, ema50 100.5, atr 2, rsi 40, wrsi 60
+    assert gate_slack(row(), 101.0, 101.0) == (0.25, 0.0)
+    r = row(close=99.0, rsi=42.0, wrsi=58.0)
+    assert gate_slack(r, 102.0, 102.0) == (0.25, 2.0)
+
+
+def test_drop_forming():
+    import datetime as dt
+    idx = pd.bdate_range("2026-10-05", periods=5)  # Mon 10-05 .. Fri 10-09
+    d = pd.DataFrame({"Close": 1.0}, index=idx)
+    assert len(drop_forming(d, dt.date(2026, 10, 9))) == 4
+    assert len(drop_forming(d, dt.date(2026, 10, 12))) == 5
+
+
+def closes(fn, n=60):
+    idx = pd.bdate_range("2026-01-01", periods=n)
+    return pd.Series([fn(i) for i in range(n)], index=idx)
+
+
+def test_rsi_window_pass():
+    assert rsi_window_pass(closes(lambda i: 100.0 - i), 30,
+                           40.0, 45.0) is False  # sunk RSI
+    assert rsi_window_pass(closes(lambda i: 100.0 + i), 30,
+                           40.0, 45.0) is False  # hot RSI
+    wob = closes(lambda i: 100.0 + 2 * math.sin(i))
+    assert rsi_window_pass(wob, 30, 45.0, 55.0) is True  # RSI ~50
+    assert rsi_window_pass(wob, 1, 40.0, 45.0) is False  # last bar ~50
+    assert rsi_window_pass(wob.iloc[:10], 5, 45.0,
+                           55.0) is False  # too short to trust
+
+
 def test_pool_union():
     both = load_pools("spy50+qqq50")
     assert len(both) == len(set(both))  # de-duplicated
@@ -164,6 +198,46 @@ def test_pool_union():
         pass
     else:
         raise AssertionError("expected ValueError for unknown pool")
+
+
+def fake_frame(ts, period="60d"):
+    idx = pd.bdate_range("2026-06-01", periods=30)
+    cols = pd.MultiIndex.from_product([ts, ["Open", "High", "Low",
+                                            "Close", "Volume"]])
+    import numpy as np
+    px = pd.DataFrame(np.arange(len(idx) * len(cols),
+                                dtype=float).reshape(len(idx), len(cols)),
+                      index=idx, columns=cols)
+    return px
+
+
+def test_batched_download_merges_chunks_and_retries_misses():
+    calls = []
+
+    def flaky(ts, **kw):
+        calls.append((list(ts), kw.get("threads")))
+        if len(calls) == 2:
+            return fake_frame([t for t in ts if t != "MISS"])  # throttled
+        return fake_frame(list(ts))
+
+    out = batched_download(["AAA", "BBB", "MISS", "CCC"], period="60d",
+                           chunk=2, pause=0.0, downloader=flaky)
+    assert out is not None
+    got = set(out.columns.get_level_values(0))
+    assert {"AAA", "BBB", "MISS", "CCC"} <= got
+    assert float(out["MISS"]["Close"].iloc[-1]) > 0  # retry filled it
+    assert any(t is False for _, t in calls)  # retry ran serially
+
+
+def test_batched_download_empty_and_single():
+    assert batched_download([], period="60d") is None
+
+    def one(ts, **kw):
+        idx = pd.bdate_range("2026-06-01", periods=5)
+        return pd.DataFrame({"Close": 1.0}, index=idx)
+
+    out = batched_download(["SOLO"], period="60d", downloader=one)
+    assert list(out.columns) == ["Close"]  # single stays flat like yf
 
 
 def test_mark_pages_gap():
@@ -187,7 +261,7 @@ def sim_frame():
         d[c] = 101.0
     d["ema50"] = 100.0
     d["atr"] = 2.0
-    d["rsi"] = 60.0
+    d["rsi"] = 30.0  # below the 40 floor: invalid unless forced to 40
     d["wrsi"] = 60.0
     return d
 

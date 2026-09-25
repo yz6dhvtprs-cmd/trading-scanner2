@@ -15,3 +15,6 @@ research/cs_oos_predictions.csv
 .secrets/
 research/_cache_intraday/
 research/intraday_oos.csv
+scanner/daily_cache/
+scanner/weekly_cache/
+scanner/hourly_cache/

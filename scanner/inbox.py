@@ -81,14 +81,16 @@ def drop_list(cfg: dict, num: str):
 
 
 def _canon_cmd(body: str) -> str:
-    """Canonical command word, or "" for non-command chatter. STOP/START
-    map to UNSUBSCRIBE/SUBSCRIBE so they never silently do nothing."""
-    w = (body or "").upper().split()
-    if not w:
+    """Canonical command word, or "" for non-command chatter. STOP maps to
+    UNSUBSCRIBE only when the whole text is exactly STOP (carrier
+    convention) — first-word matching answered bystanders like "stop by
+    later" with "Not subscribed". START maps to SUBSCRIBE."""
+    text = (body or "").strip().upper()
+    if not text:
         return ""
-    w = w[0]
-    if w == "STOP":
+    if text == "STOP":
         return "UNSUBSCRIBE"
+    w = text.split()[0]
     if w == "START":
         return "SUBSCRIBE"
     return w if w in ("SUBSCRIBE", "PAUSE", "RESUME", "UNSUBSCRIBE") else ""

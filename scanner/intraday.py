@@ -33,7 +33,9 @@ from combos import add_features, pick  # noqa: E402
 from indicators2 import add_extra  # noqa: E402
 from scan import fmt_row  # noqa: E402  (shared alert text)
 from simple_scan import add_ind as ema_ind  # noqa: E402
-from simple_scan import load_pool, setup_row  # noqa: E402
+from simple_scan import batched_download  # noqa: E402
+from simple_scan import drop_forming, load_pool  # noqa: E402
+from simple_scan import rsi_window_pass, setup_row  # noqa: E402
 from market_calendar import add_trading_days, trading_gap  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,7 +45,7 @@ STATE = os.path.join(ROOT, "scanner", "intraday_state.json")
 # no cap: fixed ETF pool, every open/watchlist name is evaluated
 EMA_STATE = os.path.join(ROOT, "scanner", "ema_state.json")
 EMA_RSI_ON = True         # live gate mirrors --rsi default
-EMA_RSI_TARGET, EMA_RSI_TOL = 40.0, 2.0  # band = target..target+tol
+EMA_RSI_TARGET, EMA_RSI_MAX = 40.0, 45.0  # mirrors --rsi-target/max
 EMA_WRSI_MIN = 55.0       # mirrors --wrsi-min (weekly regime gate)
 EMA_ATR_MULT = 1.0        # proximity band mirrors --atr-mult
 EMA_IGNORE_DAYS = 5       # ignores last this many TRADING days at most
@@ -75,6 +77,60 @@ def save_state(s: dict):
     s["date"] = dt.date.today().isoformat()
     with open(STATE, "w") as f:
         json.dump(s, f)
+
+
+def ema_batch_text(tickers: list) -> str:
+    """One batched page for a 15-min run: header line plus one ticker per
+    line. A run that pages 3 names sends 1 text, not 3."""
+    return "D_RSI 40-45, WRSI>55, EMA50\n" + "\n".join(tickers)
+
+
+def live_touch_decisions(facts: dict, quotes: dict, dst: dict,
+                         today) -> tuple:
+    """Live-touch pages for stage-1 names, one shared dedupe clock.
+
+    facts[t]: ema50/atr/rsi/wrsi/shorts_below/prev_close from the last
+    COMPLETED daily bar. quotes[t]: (live, day_open) off today's tape
+    (Yahoo prints lag ~15 min, fine for a 1-ATR touch band). Returns
+    (hits, parks, muted): fresh pages, new deep-break parks, and
+    would-page-but-deduped names. A name with no live print changes
+    nothing — no state writes here, the caller applies them.
+    """
+    hits, parks, muted = [], [], []
+    for t, d in facts.items():
+        q = quotes.get(t)
+        if q is None:
+            continue
+        live, day_open = q
+        e50, atr = d["ema50"], d["atr"]
+        if live < e50 - atr:  # broke down on the live print: park it
+            parks.append(t)
+            continue
+        if t in dst.get("ignored", {}):
+            try:
+                over = today > dt.date.fromisoformat(
+                    dst["ignored"][t]["until"])
+            except Exception:
+                over = True
+            if not (live > e50 or over):
+                continue  # still parked
+        if not (d["shorts_below"]
+                and EMA_RSI_TARGET <= d["rsi"] <= EMA_RSI_MAX
+                and d["wrsi"] > EMA_WRSI_MIN
+                and d["prev_close"] > e50 and day_open > e50
+                and abs(live - e50) <= atr):
+            continue
+        prev = dst.get("alerted", {}).get(t)
+        if prev is not None:
+            try:
+                gap = trading_gap(dt.date.fromisoformat(prev), today)
+            except Exception:
+                gap = EMA_ALERT_GAP + 1  # corrupt stamp: page, don't trap
+            if gap <= EMA_ALERT_GAP:
+                muted.append(t)
+                continue
+        hits.append(t)
+    return hits, parks, muted
 
 
 def flat(h):
@@ -198,13 +254,14 @@ def main() -> int:
                               "variant": "rps-2step", "entry": entry,
                               "stop": stop, "target": "-"}), t)
     print(f"intraday RPS: {rps_new} new setups", flush=True)
-    # 1c. EMA50+RSI40 scan over the spy50+qqq50 union, every run.
+    # 1c. EMA50+RSI40 scan over the full spy+qqq union, every run.
     # Alert only genuinely new triggers: suppressed if alerted within the
     # last EMA_ALERT_GAP trading days. Deep breaks (close < ema50 - 1 ATR)
     # park the ticker in ignored for EMA_IGNORE_DAYS or until a close back
     # over ema50, whichever is sooner.
-    import yfinance as yf
+    from daily_cache import load as load_bars, sync_pool  # noqa: E402
     ema_new, ema_ign = 0, 0
+    ema_hits: list = []  # paged this run: one batched text, not one per name
     dst = {"alerted": {}, "ignored": {}}
     if os.path.exists(EMA_STATE):
         try:
@@ -214,32 +271,52 @@ def main() -> int:
     dst.setdefault("alerted", {})
     dst.setdefault("ignored", {})
     today = dt.date.today()
-    pool = sorted(set(load_pool("spy50")) | set(load_pool("qqq50")))
+    pool = sorted(set(load_pool("spy")) | set(load_pool("qqq")))
+    # daily bars are local now: sync_pool refreshes the rotating cache once
+    # a day (first run) and every later 15-min run reads off disk — zero
+    # daily downloads intraday. Completed bars never change mid-session.
     try:
-        dd = yf.download(pool, period="1y", interval="1d",
-                         auto_adjust=True, progress=False, threads=True,
-                         group_by="ticker")
+        sync = sync_pool(pool, today=today)
     except Exception:
-        dd = None
-    if dd is not None:
-        for t in pool:
+        sync = {"refreshed": False, "missing": list(pool)}
+    # stage 1: cached closes for the full pool; only names whose last
+    # COMPLETED bar sits in the RSI band go on to full indicators
+    # (AND-filter: a name outside the band cannot page, so filtering
+    # loses nothing). The same cached frame feeds stage 2.
+    cand, frames, facts = [], {}, {}
+    for t in pool:
+        try:
+            f = drop_forming(load_bars(t).dropna(subset=["Close"]), today)
+            if len(f) < 20:
+                continue
+            if rsi_window_pass(f["Close"], 1, EMA_RSI_TARGET,
+                               EMA_RSI_MAX):
+                cand.append(t)
+                frames[t] = f
+        except Exception:
+            continue
+    if cand:
+        for t in cand:
             try:
-                f = flat(pick(dd, t)).dropna(subset=["Close"])
-                f.columns = [str(c).capitalize() for c in f.columns]
                 # completed bars only: today's forming bar would let a
                 # mid-day print alert a setup the daily chart never shows
                 # (this matches the backtest, which scores closed bars).
-                try:
-                    forming = f.index[-1].date() >= today
-                except Exception:
-                    forming = False
-                if forming:
-                    f = f.iloc[:-1]
+                f = frames[t]
                 if len(f) < 70:
                     continue
                 prev_close = float(f["Close"].iloc[-2])
                 today_open = float(f["Open"].iloc[-1])
                 last = ema_ind(f).iloc[-1]
+                facts[t] = {
+                    "ema50": float(last["ema50"]),
+                    "atr": float(last["atr"]),
+                    "rsi": float(last["rsi"]),
+                    "wrsi": float(last["wrsi"]),
+                    "shorts_below": bool(
+                        float(last["Close"]) < float(last["ema8"])
+                        and float(last["Close"]) < float(last["ema13"])
+                        and float(last["Close"]) < float(last["ema21"])),
+                    "prev_close": prev_close}
             except Exception:
                 continue
             d50, atr, px = (float(last["ema50"]), float(last["atr"]),
@@ -261,7 +338,7 @@ def main() -> int:
                 else:
                     continue
             if not setup_row(last, EMA_RSI_ON, EMA_RSI_TARGET,
-                             EMA_RSI_TOL, EMA_ATR_MULT, EMA_WRSI_MIN,
+                             EMA_RSI_MAX, EMA_ATR_MULT, EMA_WRSI_MIN,
                              prev_close, today_open):
                 continue
             prev = dst["alerted"].get(t)
@@ -274,17 +351,59 @@ def main() -> int:
                     continue
             dst["alerted"][t] = today.isoformat()
             ema_new += 1
-            once(f"ema:{t}:{today.isoformat()}",
-                 f'{t} LONG - EMA50+RSI40 pullback - '
-                 f'Entry {px:.2f} - E50 {d50:.2f} - '
-                 f'RSI {float(last["rsi"]):.0f} - '
-                 f'WRSI {float(last["wrsi"]):.0f}', t)
+            ema_hits.append(t)
+    # live-touch pass: same gates, but price-vs-line on the live print
+    # instead of the last close — a name drifting into its EMA50 at 10am
+    # pages at 10:15, not tomorrow. Daily-paged names mute here via the
+    # shared stamp (gap 0), so one clock governs both passes.
+    ema_live, ema_muted = 0, 0
+    live_pool = [t for t in facts if dst["alerted"].get(t) !=
+                 today.isoformat()]
+    if live_pool:
         try:
-            json.dump(dst, open(EMA_STATE, "w"))
+            tape = batched_download(live_pool, period="1d", interval="1m",
+                                    chunk=50)
         except Exception:
-            pass
-    print(f"intraday EMA: {ema_new} alerts, {ema_ign} ignored",
-          flush=True)
+            tape = None
+        quotes = {}
+        if tape is not None:
+            for t in live_pool:
+                try:
+                    m = tape[t] if isinstance(
+                        tape.columns, pd.MultiIndex) else tape
+                    m = m.dropna(subset=["Close"])
+                    if len(m):
+                        quotes[t] = (float(m["Close"].iloc[-1]),
+                                     float(m["Open"].iloc[0]))
+                except Exception:
+                    continue
+        hits, parks, muted = live_touch_decisions(facts, quotes, dst,
+                                                  today)
+        for t in parks:
+            dst["ignored"][t] = {
+                "until": add_trading_days(
+                    today, EMA_IGNORE_DAYS).isoformat()}
+            ema_ign += 1
+        for t in hits:
+            dst["alerted"][t] = today.isoformat()
+            if t in dst["ignored"]:
+                del dst["ignored"][t]  # recovered live: park lifted
+            ema_new += 1
+            ema_live += 1
+            ema_hits.append(t)
+        ema_muted = len(muted)
+    try:
+        json.dump(dst, open(EMA_STATE, "w"))
+    except Exception:
+        pass
+    if ema_hits:
+        slot = pt_now().strftime("%H:%M")
+        once(f"ema-batch:{today.isoformat()}:{slot}",
+             ema_batch_text(sorted(ema_hits)), "EMA")
+    src = "refreshed" if sync.get("refreshed") else "local"
+    print(f"intraday EMA: {ema_new} alerts ({ema_live} live-touch), "
+          f"{ema_ign} ignored, {ema_muted} muted "
+          f"(stage1 {len(cand)}/{len(pool)}, daily {src})", flush=True)
     # 2. open paper signals
     for idx, r in open_tr.iterrows():
         t = r["ticker"]
