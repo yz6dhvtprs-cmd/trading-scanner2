@@ -129,10 +129,28 @@ python scanner/consolidation.py --ticker AAPL --ticker MSFT --days 20 --tf 1d,1w
 python scanner/consolidation.py --ticker NVDA --days 5 --tf 1h --n 4 --width 1.0 --slope 0.10 --resid 0.50 --b-pct 0.5
 ```
 
+## Weekly anchor-box signal (Fridays 12:00 PT)
+
+Anchor week sets the box; the next weeks must sit entirely inside it;
+week n+3 scores live at noon (holiday fallback: last daily close).
+Alert needs price above weekly EMA20 + MACD bull above 0; above-EMA10
+names lead the text, EMA20-only names follow, no repeats. Same-box
+refires suppress (one alert per grind, state in
+`weekly_box_state.json`). Window span configurable (`--weeks 8`).
+
+```
+python scanner/weekly_box.py --ticker DELL
+python scanner/weekly_box.py --on 2026-09-18 --on 2026-09-11 --no-refire
+python scanner/weekly_box.py --replay 200 --no-refire --ema10-only
+python scanner/weekly_box.py --replay 200 --weeks 8 --no-refire
+python scanner/weekly_box.py --scan --no-refire --channels dry   # Friday live path, dry
+```
+
 ## Tests (all offline)
 
 ```
-python scanner/test_consolidation.py   # 7: gates, veto, B divergence, run grouping
+python scanner/test_weekly_box.py      # 14: box, gates, fallback, refire, text shape
+python scanner/test_consolidation.py   # 8: gates, veto, B divergence, run grouping, A-only
 python scanner/test_daily_cache.py     # 11: rotation, forming bars, resync, timeframes, tz
 python scanner/test_simple_scan.py     # 24: gates, pages, replay
 python scanner/test_intraday.py        # 12: batch text, live-touch branches
