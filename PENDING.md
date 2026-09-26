@@ -1,15 +1,29 @@
-# Pending / follow-ups (as of Fri 2026-09-25)
+# Pending / follow-ups (as of Sat 2026-09-26)
+
+## Shipped since last update
+- **Friday weekly anchor-box signal** (`scanner/weekly_box.py`): anchor
+  week + inside weeks, EMA10-first text, MACD>0, no-refire, Friday 12:00
+  PT plist; weeklies derived from 2y dailies; scans the 749 union.
+- **Monday screener** (`scanner/screener.py`): cap 5B–1T + RVOL20 1–10 +
+  common-equity, weekly add/remove rotation; 232 adds, union 749;
+  spy+qqq master untouched.
 
 ## To build
-- **Friday weekly signal**: consolidation above weekly EMA20/EMA10, min 4
-  candles, runs Fri 12:00 PT (1h before close); Friday-off fallback to
-  prev close / prev half-day close. Detector (`scanner/consolidation.py`)
-  is ready; the EMA20/10 gate + scheduler slot are not.
+- **Load the two plists**: `com.trade.screener` (Mon 06:00 PT) and the
+  Friday weekly-box one are created but need a manual `launchctl load`
+  before either schedule fires.
 - **Premarket pool**: `scan.py` premarket still scans 50 tickers while
-  intraday runs the 517-name spy+qqq union. Decide whether to switch it.
+  intraday + Friday box run the 749 union. Decide whether to switch it.
 - **Hourly refresh cadence**: 1h cache has no scheduled refresh — it
   fills on demand (consolidation CLI, live-touch 1m tape is separate and
   uncached). Add a slot if anything starts reading hourly bars on a loop.
+
+## Open questions
+- **ADRs**: currently excluded via the equity/name filter. Keep or allow?
+- **RPS widening**: RPS still runs the old pool; decide whether it joins
+  the 749 union like EMA + weekly box.
+- **Text volume**: batched format is one text/run; watch subscriber
+  tolerance as live-touch + 232 extra names add afternoon pages.
 
 ## To verify by hand
 - **Consolidation knobs**: check CLI boxes against real charts

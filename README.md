@@ -8,6 +8,7 @@ Approved plan implementation. Status: scaffold + rules complete, backtest valida
 - `strategies/` — 3 directional strategy specs (pullback, breakout, EMA-21 retest)
 - `skill.md` — runtime scoring checklist (the saved skill from plan step 4.b)
 - `scanner/` — nightly + pre-market routine and alert format
+`scanner/screener_pool.csv` — screener adds; `scanner/scan_pool.csv` — full 749 union w/ src column (see Monday screener)
 - `grading.md` — A+ / A / B+ / B rubric
 
 ## Run it (already set up on this machine)
@@ -66,7 +67,7 @@ Backtest per fresh signal (entry = signal-day close): days to +20%, max %,
 current %, plus a `page` column (Y = live would page it, - = muted by the
 3-trading-day dedupe). Live: intraday runs it every 15m over spy+qqq
 with 3-trading-day alert dedupe and a 5-trading-day / recovery ignore list
-(`scanner/ema_state.json`), over the full spy+qqq union. Both batch and
+(`scanner/ema_state.json`), over the 749-name master+screener union. Both batch and
 live run a staged funnel — 60d RSI prefilter on the full pool, then the 1y
 fetch plus full indicators on survivors only (same signals, ~3x faster).
 `--simulate` replays the exact live rules over
@@ -146,12 +147,45 @@ python scanner/weekly_box.py --replay 200 --weeks 8 --no-refire
 python scanner/weekly_box.py --scan --no-refire --channels dry   # Friday live path, dry
 ```
 
+The Friday live path scans the master+screener union via
+`screener.scan_pool()` (weeklies are derived from 2y dailies, so thin
+Friday tapes like PFG's can't print a wrong box low).
+
+## Monday screener (06:00 PT)
+
+SPY+QQQ (517) is master and is never touched here. A separate adds list
+is maintained from S&P 500 + Nasdaq-100 + Nasdaq-screener names ≥ $5B
+(the screener's own $5B floor stands in for Russell-1000 breadth —
+iShares blocks scripted R1000 pulls). Gates, calibrated to land
+400–500 qualifiers: market cap 5B–1000B, RVOL20 (Friday volume /
+20-day mean) in 1–10, common equity only (name filter + quoteType;
+preferreds/notes/warrants/ETFs never page). Each Monday the rotation
+adds new passers and drops tracked names that fail the week
+(`--status` shows the add/remove); spy+qqq membership never enters the
+equation. Live pool: 517 master + 232 adds = 749 scanned by the
+intraday EMA stage and the Friday weekly-box pass.
+
+```
+python scanner/screener.py --calibrate  # RVOL window table (report)
+python scanner/screener.py --run        # weekly add/remove update
+python scanner/screener.py --status     # pool counts (no network)
+```
+
+Files: `scanner/screener_pool.csv` (the 232 adds),
+`scanner/screener_state.json` (add-week stamps + overlap),
+`scanner/scan_pool.csv` (full 749 snapshot with master/screener src
+column — what to open to see every name), plus a dated candidate dump
+under `universe/`. Scheduled via `run_scan.sh screener` on the Monday
+06:00 PT plist (load once with `launchctl load`
+`~/Library/LaunchAgents/com.trade.screener.plist`).
+
 ## Tests (all offline)
 
 ```
-python scanner/test_weekly_box.py      # 14: box, gates, fallback, refire, text shape
+python scanner/test_weekly_box.py      # 16: box, gates, fallback, refire, text shape, union
 python scanner/test_consolidation.py   # 8: gates, veto, B divergence, run grouping, A-only
-python scanner/test_daily_cache.py     # 11: rotation, forming bars, resync, timeframes, tz
+python scanner/test_daily_cache.py     # 13: rotation, forming bars, resync, timeframes, tz, derived weeklies
+python scanner/test_screener.py        # 5: rvol, cap band, symbols, name filter, rotation
 python scanner/test_simple_scan.py     # 24: gates, pages, replay
 python scanner/test_intraday.py        # 12: batch text, live-touch branches
 python scanner/test_market_calendar.py # 7

@@ -11,8 +11,10 @@ Gates (calibrated 2026-09-26 to land 400-500 names):
   - common equity only (drops ETFs via quoteType; -W/-U/-R suffixes).
 Weekly rotation: names the screener added that fail this week are
 removed; spy+qqq membership is never touched. Monday 6am PT run keeps
-`screener_pool.csv` (the adds) + `screener_state.json` current; the
-15-min loop and Friday scan read spy+qqq UNION the pool file.
+`screener_pool.csv` (the adds) + `screener_state.json` current, and
+refreshes the `scan_pool.csv` snapshot (full union with a
+master/screener src column for inspection); the 15-min loop and Friday
+scan read spy+qqq UNION the pool file.
 
 Usage:
     python scanner/screener.py --calibrate   # RVOL window table
@@ -44,6 +46,7 @@ UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POOL_FILE = os.path.join(ROOT, "scanner", "screener_pool.csv")
+SCAN_POOL_FILE = os.path.join(ROOT, "scanner", "scan_pool.csv")
 STATE_FILE = os.path.join(ROOT, "scanner", "screener_state.json")
 UNIVERSE_DIR = os.path.join(ROOT, "universe")
 
@@ -315,6 +318,10 @@ def main() -> int:
     pd.DataFrame({"ticker": pool}).to_csv(POOL_FILE, index=False)
     save_state({"week": week, "names": tracked,
                 "overlap": sorted(set(qualified) & master)})
+    union = sorted(master | set(pool))
+    pd.DataFrame({"ticker": union,
+                  "src": ["screener" if t in set(pool) else "master"
+                          for t in union]}).to_csv(SCAN_POOL_FILE, index=False)
     print(f"adds: {len(added)} removed: {len(removed)} "
           f"pool: {len(pool)} overlap: {len(set(qualified) & master)}",
           flush=True)
