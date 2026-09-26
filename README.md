@@ -200,8 +200,10 @@ python scanner/test_inbox.py           # inbox replay
 
 ## Agents: start / stop (no tokens needed)
 
-The 8 background agents (analyze, bootstrap, inbox, intraday, nightly,
-premarket, saturday, screen) run as macOS LaunchAgents and reload at login.
+The background agents (analyze, bootstrap, inbox, intraday, nightly,
+premarket, screen, plus screener and weekly) run as macOS LaunchAgents
+and reload at login. (The Saturday review text was removed — no
+Saturday agent.)
 Control them from a Terminal with:
 
 ```
