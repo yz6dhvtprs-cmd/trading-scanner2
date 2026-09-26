@@ -34,6 +34,7 @@ from indicators2 import add_extra  # noqa: E402
 from scan import fmt_row  # noqa: E402  (shared alert text)
 from simple_scan import add_ind as ema_ind  # noqa: E402
 from simple_scan import batched_download  # noqa: E402
+from screener import scan_pool  # noqa: E402 (spy+qqq UNION adds)
 from simple_scan import drop_forming, load_pool  # noqa: E402
 from simple_scan import rsi_window_pass, setup_row  # noqa: E402
 from market_calendar import add_trading_days, trading_gap  # noqa: E402
@@ -271,7 +272,7 @@ def main() -> int:
     dst.setdefault("alerted", {})
     dst.setdefault("ignored", {})
     today = dt.date.today()
-    pool = sorted(set(load_pool("spy")) | set(load_pool("qqq")))
+    pool = sorted(scan_pool())
     # daily bars are local now: sync_pool refreshes the rotating cache once
     # a day (first run) and every later 15-min run reads off disk — zero
     # daily downloads intraday. Completed bars never change mid-session.

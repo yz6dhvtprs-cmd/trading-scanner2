@@ -18,3 +18,4 @@ research/intraday_oos.csv
 scanner/daily_cache/
 scanner/weekly_cache/
 scanner/hourly_cache/
+scanner/screener_state.json

@@ -77,4 +77,10 @@ case "$MODE" in
     python scanner/weekly_box.py --scan --no-refire --channels imessage \
       >> "$PROJ/scanner/logs/weekly-$STAMP.log" 2>&1
     ;;
+  screener)
+    # Monday 06:00 PT universe refresh (cap + RVOL gates, add/remove).
+    # No texts: updates screener_pool.csv for the scan union only.
+    python scanner/screener.py --run \
+      >> "$PROJ/scanner/logs/screener-$STAMP.log" 2>&1
+    ;;
 esac

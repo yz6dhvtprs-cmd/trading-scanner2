@@ -202,10 +202,24 @@ def friday_prints(tickers: list) -> dict:
     return out
 
 
+def replay_universe(tickers: list) -> list:
+    """Named tickers (uppercased) or the live scan pool (spy+qqq master
+    UNION screener adds) when none."""
+    if tickers:
+        return [x.upper() for x in tickers]
+    from screener import scan_pool  # noqa: E402 (union pool)
+    return scan_pool()
+
+
 def weeks_asof(weeks: pd.DataFrame, asof: dt.date) -> pd.DataFrame:
     """Bars at/before the eval date (a Friday close completes its week;
     nothing past asof is visible — no peeking)."""
     return weeks[weeks.index.date <= asof]
+
+
+def week_ending(monday) -> dt.date:
+    """Display date for a Monday-indexed bar: the Friday it completes."""
+    return (pd.Timestamp(monday) + pd.Timedelta(days=4)).date()
 
 
 def ticker_verdict(t: str, weeks: pd.DataFrame, daily: pd.DataFrame,
@@ -257,8 +271,8 @@ def main() -> int:
     from daily_cache import ensure, load, pool_tickers  # noqa: E402
     asof = dt.date.fromisoformat(a.date) if a.date else dt.date.today()
     if a.replay:
-        from daily_cache import load, pool_tickers  # noqa: E402
-        pool = pool_tickers()
+        from daily_cache import load  # noqa: E402
+        pool = replay_universe(a.ticker)
         floor = asof - dt.timedelta(days=a.replay)
         n_alert, n_boxonly, n_tickers, n_refire = 0, 0, 0, 0
         for t in pool:
@@ -280,7 +294,7 @@ def main() -> int:
                         continue
                     star = " *" if r["gates"]["above_ema10"] else ""
                     if not a.ema10_only or star:
-                        hits.append(f"{past.index[i].date()} "
+                        hits.append(f"{week_ending(past.index[i])} "
                                     f"{r['lower']:.0f}-{r['upper']:.0f}"
                                     f"{star}")
                 elif r["box"]:
@@ -293,7 +307,8 @@ def main() -> int:
               f"{n_tickers}/{len(pool)} tickers", flush=True)
         return 0
     if a.scan:
-        pool = pool_tickers()
+        from screener import scan_pool  # noqa: E402 (union pool)
+        pool = scan_pool()
         prints = friday_prints(pool) if session_now() else {}
         fired = load_fired() if a.no_refire else {}
         hits, strong, cut = [], [], 0
@@ -337,10 +352,9 @@ def main() -> int:
                 print("  ", r, flush=True)
         return 0
     if a.on:
-        from daily_cache import load, pool_tickers  # noqa: E402
+        from daily_cache import load  # noqa: E402
         dates = sorted({dt.date.fromisoformat(d) for d in a.on})
-        names = ([x.upper() for x in a.ticker] if a.ticker
-                 else pool_tickers())
+        names = replay_universe(a.ticker)
         fired = {}
         for D in dates:
             live_now = D == dt.date.today() and session_now()

@@ -104,7 +104,8 @@ def test_rewritten_history_resyncs_instead_of_merging():
     assert s["resynced"] == ["AAA"] and not s["ok"]
     f = dc.load("AAA")
     assert float(f["Close"].iloc[-1]) < 60.0  # replaced, not merged
-    assert any(p == "1y" for _, p in calls)  # full re-pull ran
+    full = dc.TFS["1d"]["full"]
+    assert any(p == full for _, p in calls)  # full re-pull ran
 
 
 def test_ensure_bootstraps_only_thin_tickers():
@@ -187,16 +188,58 @@ def test_hourly_tz_aware_keeps_completed():
     assert dc.load("AAA", "1h").index[-1] == pd.Timestamp("2026-09-18 12:00")
 
 
-def test_weekly_refresh_merges():
+def test_daily_to_weekly_aggregates():
+    idx = pd.DatetimeIndex([pd.Timestamp(d) for d in
+                            ["2026-08-31", "2026-09-01", "2026-09-02",
+                             "2026-09-03", "2026-09-04", "2026-09-08"]])
+    f = pd.DataFrame({"Open": [1, 2, 3, 4, 5, 6],
+                      "High": [2, 3, 4, 9, 6, 7],
+                      "Low": [0, 1, 2, 3, 4, 5],
+                      "Close": [1, 2, 3, 4, 5, 6],
+                      "Volume": 10}, index=idx)
+    w = dc.daily_to_weekly(f)
+    assert len(w) == 2
+    assert w.iloc[0][["Open", "High", "Low", "Close"]].tolist() == \
+        [1.0, 9.0, 0.0, 5.0]
+    assert w.index[0].date() == dt.date(2026, 8, 31)
+
+
+def test_rebuild_weekly_matches_dailies():
     setup_tmp()
-    mon = dt.date(2026, 9, 21)  # next Monday: 09-14 week is completed
-    dc.store("AAA", weekly_frame(["2026-09-07"]), today=mon, tf="1w")
-    new = weekly_frame(["2026-09-07", "2026-09-14", "2026-09-21"])
+    idx = pd.bdate_range("2026-08-24", periods=10)  # two full weeks
+    import numpy as np
+    rng = np.arange(50.0, 60.0)
+    d = pd.DataFrame({"Open": rng, "High": rng + 1.0, "Low": rng - 2.0,
+                      "Close": rng, "Volume": 100}, index=idx)
+    dc.store("AAA", d, today=dt.date(2026, 9, 8))  # Monday: both complete
+    s = dc.rebuild_weekly(["AAA"], today=dt.date(2026, 9, 8))
+    assert s["ok"] == ["AAA"]
+    w = dc.load("AAA", "1w")
+    assert len(w) == 2
+    assert float(w["Low"].iloc[0]) == float(d["Low"].iloc[:5].min())
+    assert float(w["High"].iloc[0]) == float(d["High"].iloc[:5].max())
+    assert float(w["Close"].iloc[0]) == float(d["Close"].iloc[4])
+
+
+def test_weekly_refresh_merges():
+    # weekly refresh = daily delta + rebuild: feed two work-weeks of
+    # dailies, expect both completed weeks derived (09-21 forming cut).
+    setup_tmp()
+    mon = dt.date(2026, 9, 21)
+    idx = pd.bdate_range("2026-09-07", periods=10)
+    import numpy as np
+    vals = np.arange(100.0, 110.0)
+    new = pd.DataFrame({"Open": vals, "High": vals + 1.0,
+                        "Low": vals - 1.0, "Close": vals,
+                        "Volume": 100}, index=idx)
+    cols = pd.MultiIndex.from_product([["AAA"], new.columns])
+    new.columns = cols
     s = dc.refresh(["AAA"], downloader=dl_factory(new), today=mon,
                    tf="1w")
     assert s["ok"] == ["AAA"] and not s["missing"]
     f = dc.load("AAA", "1w")
-    assert f.index[-1].date() == dt.date(2026, 9, 14)  # 09-21 forming cut
+    assert [d.date() for d in f.index] == [dt.date(2026, 9, 7),
+                                           dt.date(2026, 9, 14)]
 
 
 TESTS = [v for k, v in sorted(globals().items())

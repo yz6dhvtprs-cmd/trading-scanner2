@@ -127,6 +127,20 @@ def test_fallback_uses_last_daily_close():
     assert r["box"] is True
 
 
+def test_replay_universe_names_or_pool():
+    from weekly_box import replay_universe
+    from screener import scan_pool
+    assert replay_universe(["dell"]) == ["DELL"]
+    assert replay_universe([]) == scan_pool()
+    assert len(scan_pool()) > 517 and "DELL" in scan_pool()
+
+
+def test_week_ending_display():
+    from weekly_box import week_ending
+    assert week_ending(pd.Timestamp("2026-08-31")) == dt.date(2026, 9, 4)
+    assert week_ending(pd.Timestamp("2026-09-14")) == dt.date(2026, 9, 18)
+
+
 def test_weeks_asof_hides_future():
     from weekly_box import weeks_asof
     f = weeks_frame(box_tail())

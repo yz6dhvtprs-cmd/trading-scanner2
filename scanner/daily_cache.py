@@ -64,9 +64,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_ROOT = os.path.join(ROOT, "scanner")
 TFS = {
     # dir/keep/min-bars/delta-period/full-period/download-chunk
-    "1d": {"dir": "daily_cache", "keep": 400, "min": 200,
-           "delta": "5d", "full": "1y", "chunk": 100, "interval": "1d"},
-    "1w": {"dir": "weekly_cache", "keep": 200, "min": 100,
+    "1d": {"dir": "daily_cache", "keep": 600, "min": 200,
+           "delta": "5d", "full": "2y", "chunk": 100, "interval": "1d"},
+    "1w": {"dir": "weekly_cache", "keep": 200, "min": 45,
            "delta": "3mo", "full": "2y", "chunk": 100, "interval": "1wk"},
     "1h": {"dir": "hourly_cache", "keep": 1000, "min": 500,
            "delta": "5d", "full": "6mo", "chunk": 50, "interval": "1h"},
@@ -194,11 +194,60 @@ def _needs_resync(old: pd.DataFrame, fresh: pd.DataFrame,
         return False
 
 
+def daily_to_weekly(d: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate daily bars into Monday-start weekly bars (O first, H
+    max, L min, C last, V sum). Single source of truth: weeklies are
+    always derived from dailies, so the two can never disagree the way
+    separately-fetched series did (PFG 08-31: weekly low 108.65 vs the
+    daily print 107.83)."""
+    d = d.dropna(subset=["Close", "High", "Low"]).copy()
+    if not len(d):
+        return d
+    monday = d.index - pd.to_timedelta(d.index.weekday, unit="D")
+    g = d.groupby(monday.normalize())
+    w = pd.DataFrame({"Open": g["Open"].first(), "High": g["High"].max(),
+                      "Low": g["Low"].min(), "Close": g["Close"].last(),
+                      "Volume": g["Volume"].sum() if "Volume" in d.columns
+                      else 0})
+    return w.sort_index()
+
+
+def rebuild_weekly(tickers: list, today=None) -> dict:
+    """Rewrite stored weekly bars from cached dailies (completed weeks
+    only). Returns {ok, missing} — resyncs are obsolete by construction."""
+    today = today or dt.date.today()
+    stats: dict = {"ok": [], "missing": [], "resynced": []}
+    co = _cutoff("1w", today)
+    for t in dict.fromkeys(tickers):
+        d = load(t, "1d")
+        if len(d) < 5:
+            stats["missing"].append(t)
+            continue
+        w = daily_to_weekly(d)
+        w = w[[i < co for i in w.index.date]]
+        if not len(w):
+            stats["missing"].append(t)
+            continue
+        w = w.tail(TFS["1w"]["keep"])
+        os.makedirs(_dir("1w"), exist_ok=True)
+        w.to_csv(_path(t, "1w"), index_label="Date")
+        stats["ok"].append(t)
+    return stats
+
+
 def refresh(tickers: list, period: str = None, downloader=None,
             today=None, tf: str = "1d") -> dict:
     """Small delta merge for every ticker (gap-fill + new bars). Tickers
     whose history was rewritten are re-bootstrapped from the full period
-    instead."""
+    instead. Weekly bars are never fetched — the daily delta merges,
+    then weeklies rebuild from dailies."""
+    if tf == "1w":
+        rd = refresh(tickers, period=period, downloader=downloader,
+                     today=today, tf="1d")
+        stats = rebuild_weekly(tickers, today=today)
+        stats["missing"] = sorted(set(rd["missing"]) | set(
+            stats["missing"]))
+        return stats
     today = today or dt.date.today()
     cfg = TFS[tf]
     period = cfg["delta"] if period is None else period
@@ -253,8 +302,14 @@ def refresh(tickers: list, period: str = None, downloader=None,
 def ensure(tickers: list, min_bars: int = None, downloader=None,
            today=None, tf: str = "1d") -> list:
     """Full-period bootstrap for tickers with no (or too-thin) cache.
-    Returns the tickers actually filled."""
+    Returns the tickers actually filled. Weekly bootstraps fill dailies
+    first, then derive weeklies (never fetched)."""
     today = today or dt.date.today()
+    if tf == "1w":
+        got = ensure(tickers, min_bars=None, downloader=downloader,
+                     today=today, tf="1d")
+        stats = rebuild_weekly(tickers, today=today)
+        return [t for t in got if t in stats["ok"]]
     cfg = TFS[tf]
     min_bars = cfg["min"] if min_bars is None else min_bars
     thin = [t for t in dict.fromkeys(tickers)
