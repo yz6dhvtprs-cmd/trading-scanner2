@@ -69,10 +69,11 @@ def window_gate(win: pd.DataFrame, atr: float, n: int, width_atr: float,
              "resid_atr": resid / atr if atr > 0 else float("inf"),
              "b_pct": (statistics.pstdev(closes) / (sum(closes) / n)
                        * 100.0) if n > 1 else 0.0}
+    slope_ok = slope_atr is None or abs(stats["slope_atr"]) <= slope_atr
+    resid_ok = resid_atr is None or stats["resid_atr"] <= resid_atr
     stats["active"] = bool(
         atr > 0 and stats["width_atr"] <= width_atr
-        and abs(stats["slope_atr"]) <= slope_atr
-        and stats["resid_atr"] <= resid_atr)
+        and slope_ok and resid_ok)
     return stats
 
 
@@ -179,6 +180,8 @@ def main() -> int:
                     help="E veto: slope per bar in ATRs")
     ap.add_argument("--resid", type=float, default=0.50,
                     help="E veto: max residual in ATRs")
+    ap.add_argument("--a-only", action="store_true",
+                    help="A gate only: skip the E slope/residual veto")
     ap.add_argument("--b-pct", type=float, default=0.5,
                     help="B confirm threshold (close stdev %)")
     a = ap.parse_args()
@@ -187,6 +190,7 @@ def main() -> int:
     from daily_cache import ensure, load  # noqa: E402 (local bars)
     today = dt.date.today()
     floor = today - dt.timedelta(days=a.days)
+    slope, resid = (None, None) if a.a_only else (a.slope, a.resid)
     for t in [x.upper() for x in a.ticker]:
         for tf in [s.strip() for s in a.tf.split(",") if s.strip()]:
             ensure([t], today=today, tf=tf)  # single-ticker fill, cheap
@@ -195,7 +199,7 @@ def main() -> int:
                 print(f"{t} {tf}: no bars cached", flush=True)
                 continue
             runs = [r for r in find_runs(
-                f, a.n, a.width, a.slope, a.resid, a.b_pct)
+                f, a.n, a.width, slope, resid, a.b_pct)
                 if r["end"].date() >= floor]
             if not runs:
                 print(f"{t} {tf}: no consolidation in last "

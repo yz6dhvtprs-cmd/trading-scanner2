@@ -1,5 +1,5 @@
 #!/bin/bash
-# Trading-system runner for launchd. Modes: nightly | premarket | saturday | bootstrap
+# Trading-system runner for launchd. Modes: nightly | premarket | saturday | bootstrap | weekly
 # Logs: scanner/logs/<mode>-<date>.log. Alerts go out over iMessage.
 PROJ=/Users/vismaypatel/trading-indicators
 cd "$PROJ" || exit 1
@@ -65,5 +65,16 @@ case "$MODE" in
   inbox)
     python scanner/inbox.py --channels imessage \
       >> "$PROJ/scanner/logs/inbox-$STAMP.log" 2>&1
+    ;;
+  weekly)
+    # Friday 12:00 PT anchor-box consolidation scan (one batched text).
+    # Friday-off fallback (prev close) lives inside weekly_box.py.
+    if ! python scanner/market_calendar.py > /dev/null 2>&1; then
+      echo "$(date '+%F %T') weekly skipped: market closed" \
+        >> "$PROJ/scanner/logs/weekly-$STAMP.log" 2>&1
+      exit 0
+    fi
+    python scanner/weekly_box.py --scan --no-refire --channels imessage \
+      >> "$PROJ/scanner/logs/weekly-$STAMP.log" 2>&1
     ;;
 esac

@@ -87,6 +87,27 @@ def test_find_runs_empty_when_trending():
     assert find_runs(frame(ramp()), n=4) == []
 
 
+def drifting_box(d=0.6):
+    # volatile history (ATR memory) then a tight climbing box: the last
+    # window fits ~0.5 ATR while climbing ~0.13 ATR/bar, so E vetoes it
+    # and A-only keeps it (the DELL weekly case).
+    wild = [(100 + (3 if i % 2 else -3), 103 + (3 if i % 2 else -3),
+             97 + (3 if i % 2 else -3), 100 + (3 if i % 2 else -3))
+            for i in range(20)]
+    drift = [(100 + d * i, 100.25 + d * i, 99.75 + d * i, 100 + d * i)
+             for i in range(10)]
+    return frame(wild + drift)
+
+
+def test_a_only_catches_drifting_box():
+    assert consolidation(drifting_box(), n=4)["active"] is False
+    r = consolidation(drifting_box(), n=4, slope_atr=None,
+                      resid_atr=None)
+    assert r["active"] is True
+    assert r["width_atr"] <= 1.0
+    assert r["bars"] >= 4
+
+
 TESTS = [v for k, v in sorted(globals().items())
          if k.startswith("test_") and callable(v)]
 
