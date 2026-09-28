@@ -7,8 +7,11 @@ Approved plan implementation. Status: scaffold + rules complete, backtest valida
 - `universe/` — top-50 methodology, fetch script, `universe_v1.csv` (TEMPLATE — refresh before any use)
 - `strategies/` — 3 directional strategy specs (pullback, breakout, EMA-21 retest)
 - `skill.md` — runtime scoring checklist (the saved skill from plan step 4.b)
-- `scanner/` — nightly + pre-market routine and alert format
-`scanner/screener_pool.csv` — screener adds; `scanner/scan_pool.csv` — full 749 union w/ src column (see Monday screener)
+- `algos/` — signal + indicator logic (EMA, weekly box, screener, RPS, cache)
+- `ops/` — orchestration launchd runs (scans, inbox, run_scan.sh, agents.sh)
+- `data/` — caches, pools, state, paper-trade log (`signal_log.csv`)
+- `logs/` — all run logs; `docs/` — all markdown (reports under `docs/reports/`)
+`data/screener_pool.csv` — screener adds; `data/scan_pool.csv` — full 749 union w/ src column (see Monday screener)
 - `grading.md` — A+ / A / B+ / B rubric
 
 ## Run it (already set up on this machine)
@@ -38,20 +41,20 @@ stale. Measured 60d over 13 QQQ/SPY top-10 tickers: 9–3 decided (75%,
 Live (on by default in the nightly scan; same code as the backtest):
 
 ```
-python scanner/scan.py --pool top50 --channels dry   # dry run, prints only
-python scanner/scan.py --no-rps                      # OLD signals only
+python ops/scan.py --pool top50 --channels dry   # dry run, prints only
+python ops/scan.py --no-rps                      # OLD signals only
 ```
 
-RPS rows land in `scanner/signal_log.csv` (strategy RPS, grade B) and flow
+RPS rows land in `data/signal_log.csv` (strategy RPS, grade B) and flow
 through the premarket gate + intraday ENTERED/STOPPED tracking untouched.
 
 Backtest it (tool stays open alongside live):
 
 ```
-python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score    # v2 two-step, next-open fills, tag [RPS] (RPS2 = same)
-python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS1 --score   # v1 legacy: bare pair agreement, tag [R3+R10]
-python scanner/backtest_analyzer.py --ticker AAPL --days 20 --algo OLD --score    # mainline algo.json strategies (not reversals)
-RPS_WASH_LO=40 RPS_WASH_HI=60 python scanner/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score  # threshold sweep
+python algos/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score    # v2 two-step, next-open fills, tag [RPS] (RPS2 = same)
+python algos/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS1 --score   # v1 legacy: bare pair agreement, tag [R3+R10]
+python algos/backtest_analyzer.py --ticker AAPL --days 20 --algo OLD --score    # mainline algo.json strategies (not reversals)
+RPS_WASH_LO=40 RPS_WASH_HI=60 python algos/backtest_analyzer.py --ticker AAPL --days 60 --algo RPS --score  # threshold sweep
 ```
 
 ## Simple EMA scanner (pullback to value)
@@ -67,7 +70,7 @@ Backtest per fresh signal (entry = signal-day close): days to +20%, max %,
 current %, plus a `page` column (Y = live would page it, - = muted by the
 3-trading-day dedupe). Live: intraday runs it every 15m over spy+qqq
 with 3-trading-day alert dedupe and a 5-trading-day / recovery ignore list
-(`scanner/ema_state.json`), over the 749-name master+screener union. Both batch and
+(`data/ema_state.json`), over the 749-name master+screener union. Both batch and
 live run a staged funnel — 60d RSI prefilter on the full pool, then the 1y
 fetch plus full indicators on survivors only (same signals, ~3x faster).
 `--simulate` replays the exact live rules over
@@ -77,10 +80,10 @@ prints what would have paged vs muted with reasons. Both tables carry
 are margin calls that any data wobble can flip:
 
 ```
-python scanner/simple_scan.py --ticker NVDA --days 60
-python scanner/simple_scan.py --pool spy+qqq --days 60
-python scanner/simple_scan.py --pool spy50 --days 90 --target 0.20 --rsi-target 40
-python scanner/simple_scan.py --pool spy50 --days 60 --simulate
+python algos/simple_scan.py --ticker NVDA --days 60
+python algos/simple_scan.py --pool spy+qqq --days 60
+python algos/simple_scan.py --pool spy50 --days 90 --target 0.20 --rsi-target 40
+python algos/simple_scan.py --pool spy50 --days 60 --simulate
 ```
 
 Pools: sp100 (top-100 S&P weights, proxy), sp500, spy, qqq, spy50, qqq50
@@ -102,16 +105,16 @@ PQR
 ## Local bar cache (1d/1w/1h, no re-downloads)
 
 Completed bars are stored per ticker under
-`scanner/{daily_cache,weekly_cache,hourly_cache}/` (gitignored) and
+`data/{daily_cache,weekly_cache,hourly_cache}/` (gitignored) and
 refreshed incrementally — the 15-min loop pays network once a day, and
 the batch tools reuse the chunked downloader with serial retry. Check
 health, backfill, or top up per timeframe:
 
 ```
-python scanner/daily_cache.py --tf 1d --status
-python scanner/daily_cache.py --tf 1w --bootstrap
-python scanner/daily_cache.py --tf 1h --refresh
-python scanner/daily_cache.py --tf 1h --bootstrap
+python algos/daily_cache.py --tf 1d --status
+python algos/daily_cache.py --tf 1w --bootstrap
+python algos/daily_cache.py --tf 1h --refresh
+python algos/daily_cache.py --tf 1h --bootstrap
 ```
 
 EMA/RSI/ATR are recomputed from local bars (stateless; splits and
@@ -125,9 +128,9 @@ B close-clustering reported as a confirm flag for the alert line.
 Returns boundaries + run length. Manual chart-check harness:
 
 ```
-python scanner/consolidation.py --ticker NVDA --days 10
-python scanner/consolidation.py --ticker AAPL --ticker MSFT --days 20 --tf 1d,1w
-python scanner/consolidation.py --ticker NVDA --days 5 --tf 1h --n 4 --width 1.0 --slope 0.10 --resid 0.50 --b-pct 0.5
+python algos/consolidation.py --ticker NVDA --days 10
+python algos/consolidation.py --ticker AAPL --ticker MSFT --days 20 --tf 1d,1w
+python algos/consolidation.py --ticker NVDA --days 5 --tf 1h --n 4 --width 1.0 --slope 0.10 --resid 0.50 --b-pct 0.5
 ```
 
 ## Weekly anchor-box signal (Fridays 12:00 PT)
@@ -140,11 +143,11 @@ refires suppress (one alert per grind, state in
 `weekly_box_state.json`). Window span configurable (`--weeks 8`).
 
 ```
-python scanner/weekly_box.py --ticker DELL
-python scanner/weekly_box.py --on 2026-09-18 --on 2026-09-11 --no-refire
-python scanner/weekly_box.py --replay 200 --no-refire --ema10-only
-python scanner/weekly_box.py --replay 200 --weeks 8 --no-refire
-python scanner/weekly_box.py --scan --no-refire --channels dry   # Friday live path, dry
+python algos/weekly_box.py --ticker DELL
+python algos/weekly_box.py --on 2026-09-18 --on 2026-09-11 --no-refire
+python algos/weekly_box.py --replay 200 --no-refire --ema10-only
+python algos/weekly_box.py --replay 200 --weeks 8 --no-refire
+python algos/weekly_box.py --scan --no-refire --channels dry   # Friday live path, dry
 ```
 
 The Friday live path scans the master+screener union via
@@ -166,14 +169,14 @@ equation. Live pool: 517 master + 232 adds = 749 scanned by the
 intraday EMA stage and the Friday weekly-box pass.
 
 ```
-python scanner/screener.py --calibrate  # RVOL window table (report)
-python scanner/screener.py --run        # weekly add/remove update
-python scanner/screener.py --status     # pool counts (no network)
+python algos/screener.py --calibrate  # RVOL window table (report)
+python algos/screener.py --run        # weekly add/remove update
+python algos/screener.py --status     # pool counts (no network)
 ```
 
-Files: `scanner/screener_pool.csv` (the 232 adds),
-`scanner/screener_state.json` (add-week stamps + overlap),
-`scanner/scan_pool.csv` (full 749 snapshot with master/screener src
+Files: `data/screener_pool.csv` (the 232 adds),
+`data/screener_state.json` (add-week stamps + overlap),
+`data/scan_pool.csv` (full 749 snapshot with master/screener src
 column — what to open to see every name), plus a dated candidate dump
 under `universe/`. Scheduled via `run_scan.sh screener` on the Monday
 06:00 PT plist (load once with `launchctl load`
@@ -182,14 +185,14 @@ under `universe/`. Scheduled via `run_scan.sh screener` on the Monday
 ## Tests (all offline)
 
 ```
-python scanner/test_weekly_box.py      # 16: box, gates, fallback, refire, text shape, union
-python scanner/test_consolidation.py   # 8: gates, veto, B divergence, run grouping, A-only
-python scanner/test_daily_cache.py     # 13: rotation, forming bars, resync, timeframes, tz, derived weeklies
-python scanner/test_screener.py        # 5: rvol, cap band, symbols, name filter, rotation
-python scanner/test_simple_scan.py     # 24: gates, pages, replay
-python scanner/test_intraday.py        # 12: batch text, live-touch branches
-python scanner/test_market_calendar.py # 7
-python scanner/test_inbox.py           # inbox replay
+python algos/test_weekly_box.py      # 16: box, gates, fallback, refire, text shape, union
+python algos/test_consolidation.py   # 8: gates, veto, B divergence, run grouping, A-only
+python algos/test_daily_cache.py     # 13: rotation, forming bars, resync, timeframes, tz, derived weeklies
+python algos/test_screener.py        # 5: rvol, cap band, symbols, name filter, rotation
+python algos/test_simple_scan.py     # 24: gates, pages, replay
+python algos/test_intraday.py        # 12: batch text, live-touch branches
+python algos/test_market_calendar.py # 7
+python algos/test_inbox.py           # inbox replay
 ```
 
 ## Gate before live
@@ -208,10 +211,10 @@ Control them from a Terminal with:
 
 ```
 cd ~/trading-indicators
-./scanner/agents.sh status    # check what's loaded
-./scanner/agents.sh stop      # stop everything
-./scanner/agents.sh start     # start everything
-./scanner/agents.sh restart   # stop + start
+./ops/agents.sh status    # check what's loaded
+./ops/agents.sh stop      # stop everything
+./ops/agents.sh start     # start everything
+./ops/agents.sh restart   # stop + start
 ```
 
 While stopped, interval scans and inbox polling pause; inbound SUBSCRIBE
