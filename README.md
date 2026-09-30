@@ -135,7 +135,8 @@ python algos/consolidation.py --ticker NVDA --days 5 --tf 1h --n 4 --width 1.0 -
 
 ## Weekly anchor-box signal (Fridays 12:00 PT)
 
-Anchor week sets the box; the next weeks must sit entirely inside it;
+Anchor week sets the box; the next weeks keep their bodies (open+close)
+inside it — wicks may poke out;
 week n+3 scores live at noon (holiday fallback: last daily close).
 Alert needs price above weekly EMA20 + MACD bull above 0; above-EMA10
 names lead the text, EMA20-only names follow, no repeats. Same-box
@@ -204,9 +205,9 @@ python algos/test_inbox.py           # inbox replay
 ## Agents: start / stop (no tokens needed)
 
 The background agents (analyze, bootstrap, inbox, intraday, nightly,
-premarket, screen, plus screener and weekly) run as macOS LaunchAgents
-and reload at login. (The Saturday review text was removed — no
-Saturday agent.)
+premarket, plus screener and weekly) run as macOS LaunchAgents and
+reload at login. (Removed: Saturday review text, and the morning
+screen/TOP10 text — `ops/screen.py` stays for manual runs.)
 Control them from a Terminal with:
 
 ```

@@ -1,12 +1,11 @@
 """Weekly anchor-box consolidation signal (runs Friday 12pm PT).
 
 Pattern (4 weeks, no ATR math): anchor week n sets the box; weeks n+1
-and n+2 must sit ENTIRELY inside it (high <= anchor high AND low >=
-anchor low, edges inclusive — a wick outside breaks the box even when
-the close is inside); week n+3 is scored live — Friday 12pm current
-price inside the box completes it. If Friday is a holiday, week n+3
-falls back to the last daily close (Thursday's print, equivalently the
-prior half-day logic).
+and n+2 keep their BODIES inside it (open AND close within anchor low
+to anchor high, edges inclusive — wicks may poke out); week n+3 is
+scored live — Friday 12pm current price inside the box completes it.
+If Friday is a holiday, week n+3 falls back to the last daily close
+(Thursday's print, equivalently the prior half-day logic).
 
 Alert requires the regime gates on top of the box, all on completed
 weekly bars (slow lines never read a forming bar):
@@ -40,13 +39,14 @@ def anchor_box_complete(anchor_high: float, anchor_low: float,
                         closes: list, bars=None) -> bool:
     """Box verdict: every follow-up close (c1, c2, live) sits inside the
     anchor week's [low, high], edges inclusive. When `bars` (the n+1/n+2
-    week rows) is given, their full range must sit inside too — a wick
-    outside breaks the box even with the close inside."""
+    week rows) is given, each week's open AND close must sit inside too —
+    wicks may poke out, bodies may not."""
     if not all(anchor_low <= c <= anchor_high for c in closes):
         return False
     if bars is not None:
         for _, r in bars.iterrows():
-            if not (r["Low"] >= anchor_low and r["High"] <= anchor_high):
+            if not (anchor_low <= r["Open"] <= anchor_high
+                    and anchor_low <= r["Close"] <= anchor_high):
                 return False
     return True
 
@@ -91,7 +91,7 @@ def evaluate(weeks: pd.DataFrame, price: float, live: bool = True,
     out = {"box": False, "alert": False, "lower": None, "upper": None,
            "price": round(price, 2), "live": live, "gates": None,
            "span": span}
-    w = weeks.dropna(subset=["Close", "High", "Low"])
+    w = weeks.dropna(subset=["Close", "High", "Low", "Open"])
     if span < 3 or len(w) < span - 1:
         return out
     anchor = w.iloc[-span + 1]

@@ -108,9 +108,17 @@ def test_thin_history_gates_shut():
     assert r["alert"] is False  # ... but unsettled lines never page
 
 
-def test_wick_outside_breaks_box():
+def test_wick_outside_passes_when_body_inside():
     tail = [(143.0, 146.0, 142.0, 143.0),
-            (144.0, 147.0, 143.0, 144.0),  # close in, high pokes out
+            (144.0, 147.0, 141.0, 144.0),  # wicks poke out, O+C inside
+            (145.0, 146.0, 144.0, 145.0)]
+    r = evaluate(weeks_frame(tail), 145.2, live=True)
+    assert r["box"] is True and r["alert"] is True
+
+
+def test_open_outside_kills_box():
+    tail = [(143.0, 146.0, 142.0, 143.0),
+            (147.0, 147.5, 143.0, 144.0),  # open gaps out, close back in
             (145.0, 146.0, 144.0, 145.0)]
     r = evaluate(weeks_frame(tail), 145.2, live=True)
     assert r["box"] is False and r["alert"] is False
