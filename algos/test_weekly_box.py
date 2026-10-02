@@ -18,7 +18,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from weekly_box import alert_line, anchor_box_complete  # noqa: E402
-from weekly_box import evaluate, ticker_verdict  # noqa: E402
+from weekly_box import evaluate, session_now, ticker_verdict  # noqa: E402
 
 
 def weeks_frame(extra):
@@ -114,6 +114,12 @@ def test_wick_outside_passes_when_body_inside():
             (145.0, 146.0, 144.0, 145.0)]
     r = evaluate(weeks_frame(tail), 145.2, live=True)
     assert r["box"] is True and r["alert"] is True
+
+
+def test_session_now_resolves():
+    # regression: session rule lives in market_calendar (post-restructure
+    # the Friday --scan path crashed importing it from ops/intraday).
+    assert isinstance(session_now(), bool)
 
 
 def test_open_outside_kills_box():

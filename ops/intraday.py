@@ -39,7 +39,8 @@ from simple_scan import batched_download  # noqa: E402
 from screener import scan_pool  # noqa: E402 (spy+qqq UNION adds)
 from simple_scan import drop_forming, load_pool  # noqa: E402
 from simple_scan import rsi_window_pass, setup_row  # noqa: E402
-from market_calendar import add_trading_days, trading_gap  # noqa: E402
+from market_calendar import add_trading_days, market_open, pt_now  # noqa: E402
+from market_calendar import trading_gap  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, "data", "signal_log.csv")
@@ -53,18 +54,6 @@ EMA_WRSI_MIN = 55.0       # mirrors --wrsi-min (weekly regime gate)
 EMA_ATR_MULT = 1.0        # proximity band mirrors --atr-mult
 EMA_IGNORE_DAYS = 5       # ignores last this many TRADING days at most
 EMA_ALERT_GAP = 3         # re-alert only after this many TRADING days
-
-
-def pt_now():
-    return dt.datetime.now(dt.timezone(dt.timedelta(hours=-7)))
-
-
-def market_open(now=None) -> bool:
-    now = now or pt_now()
-    if now.weekday() >= 5:
-        return False
-    mins = now.hour * 60 + now.minute
-    return 6 * 60 + 30 <= mins <= 13 * 60 + 5  # 6:30a-1:05p PT
 
 
 def load_state() -> dict:

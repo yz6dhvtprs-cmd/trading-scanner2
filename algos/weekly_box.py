@@ -177,7 +177,7 @@ def weekly_batch_text(strong: list, rest: list,
 
 def session_now() -> bool:
     """True inside the 06:30-13:00 PT tape (same window as intraday)."""
-    from intraday import market_open  # noqa: E402 (shared session rule)
+    from market_calendar import market_open  # noqa: E402 (shared session rule)
     return market_open()
 
 
@@ -334,8 +334,8 @@ def main() -> int:
                 hits.append(t)
                 if r["gates"]["above_ema10"]:
                     strong.append(t)
-        if a.no_refire:
-            save_fired(fired)
+        if a.no_refire and a.channels != "dry":
+            save_fired(fired)  # dry runs stay side-effect-free
         print(f"WEEKLY BOX {len(hits)}/{len(pool)}"
               f"{f' ({cut} refires cut)' if a.no_refire else ''}",
               flush=True)

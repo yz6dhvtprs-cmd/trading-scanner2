@@ -68,6 +68,19 @@ def is_open(day: dt.date) -> bool:
     return day.weekday() < 5 and day not in holidays(day.year)
 
 
+def pt_now():
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=-7)))
+
+
+def market_open(now=None) -> bool:
+    """True inside the 06:30-13:00 PT tape (intraday + Friday live)."""
+    now = now or pt_now()
+    if now.weekday() >= 5:
+        return False
+    mins = now.hour * 60 + now.minute
+    return 6 * 60 + 30 <= mins <= 13 * 60 + 5  # 6:30a-1:05p PT
+
+
 def trading_gap(prev: dt.date, today: dt.date) -> int:
     """Trading sessions in (prev, today]: 0 same-day, 1 next session."""
     n, d = 0, prev + dt.timedelta(days=1)
