@@ -8,6 +8,7 @@ ops/config.json
 logs/
 data/agent_watch.json
 data/*_state.json
+data/rh_overrides.json
 data/inbox_state.json
 research/_cache/
 research/v5_oos_predictions.csv

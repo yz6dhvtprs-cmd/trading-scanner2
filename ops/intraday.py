@@ -48,6 +48,7 @@ WATCH = os.path.join(ROOT, "data", "watchlist.csv")
 STATE = os.path.join(ROOT, "data", "intraday_state.json")
 # no cap: fixed ETF pool, every open/watchlist name is evaluated
 EMA_STATE = os.path.join(ROOT, "data", "ema_state.json")
+RH_OVERRIDES = os.path.join(ROOT, "data", "rh_overrides.json")
 EMA_RSI_ON = True         # live gate mirrors --rsi default
 EMA_RSI_TARGET, EMA_RSI_MAX = 40.0, 45.0  # mirrors --rsi-target/max
 EMA_WRSI_MIN = 55.0       # mirrors --wrsi-min (weekly regime gate)
@@ -344,6 +345,18 @@ def main() -> int:
             dst["alerted"][t] = today.isoformat()
             ema_new += 1
             ema_hits.append(t)
+    # remote-price swap: narrowed names with fresh RH server values use
+    # the full remote set (ema/rsi/atr/wrsi) in the live-touch gate below;
+    # everyone else stays local. A stale/missing overrides file leaves
+    # facts untouched, so this degrades to the old behavior by default.
+    n_rh = 0
+    try:
+        from rh_mcp import apply_remote, load_overrides  # noqa: E402
+        facts = apply_remote(
+            facts, load_overrides(RH_OVERRIDES, today), today)
+        n_rh = sum(1 for d in facts.values() if d.get("_src") == "rh")
+    except Exception:
+        pass
     # live-touch pass: same gates, but price-vs-line on the live print
     # instead of the last close — a name drifting into its EMA50 at 10am
     # pages at 10:15, not tomorrow. Daily-paged names mute here via the
@@ -395,7 +408,8 @@ def main() -> int:
     src = "refreshed" if sync.get("refreshed") else "local"
     print(f"intraday EMA: {ema_new} alerts ({ema_live} live-touch), "
           f"{ema_ign} ignored, {ema_muted} muted "
-          f"(stage1 {len(cand)}/{len(pool)}, daily {src})", flush=True)
+          f"(stage1 {len(cand)}/{len(pool)}, {n_rh} rh-remote, "
+          f"daily {src})", flush=True)
     # 2. open paper signals
     for idx, r in open_tr.iterrows():
         t = r["ticker"]
