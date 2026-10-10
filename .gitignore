@@ -20,3 +20,4 @@ data/daily_cache/
 data/weekly_cache/
 data/hourly_cache/
 data/screener_state.json
+data/wbox_watch.json

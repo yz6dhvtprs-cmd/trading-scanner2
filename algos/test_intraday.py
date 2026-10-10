@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "backtest"))
 
 from intraday import ema_batch_text, live_touch_decisions  # noqa: E402
+from intraday import read_log, session_elapsed  # noqa: E402
 
 
 def test_batch_shape():
@@ -117,6 +118,35 @@ def test_live_gates_mirror_daily():
 
 def test_live_missing_print_changes_nothing():
     assert decide(live_facts(), {}, live_dst()) == ([], [], [])
+
+
+def test_read_log_text_columns_writable():
+    import tempfile
+    import pandas as pd
+    path = os.path.join(tempfile.mkdtemp(), "log.csv")
+    pd.DataFrame([{
+        "date": "2026-10-01", "ticker": "AMGN", "strategy": "RPS",
+        "side": "long", "entry": 412.23, "stop": 389.65, "target": "-",
+        "grade": "B", "timeframe": "intraday15", "status": "ENTERED",
+        "outcome_R": "", "exit_reason": "", "regime": "", "news_flag": "",
+        "notes": "k"}]).to_csv(path, index=False)
+    log = read_log(path)
+    assert log["outcome_R"].isna().all()
+    # an all-empty text column must take a string: float64 raised here
+    # and killed every 15-min run 10/07-10/09 at the stop branch
+    log.at[0, "exit_reason"] = "stop"
+    log.at[0, "outcome_R"] = -1.0
+    assert log.at[0, "exit_reason"] == "stop"
+    assert log.at[0, "outcome_R"] == -1.0
+    assert read_log(os.path.join(tempfile.mkdtemp(), "none.csv")).empty
+
+
+def test_session_elapsed_pacing():
+    assert session_elapsed(dt.datetime(2026, 10, 12, 6, 30)) == 0.1
+    assert abs(session_elapsed(dt.datetime(2026, 10, 12, 8, 7))
+               - 97 / 390) < 1e-9
+    assert session_elapsed(dt.datetime(2026, 10, 12, 13, 0)) == 1.0
+    assert session_elapsed(dt.datetime(2026, 10, 12, 15, 0)) == 1.0
 
 
 TESTS = [v for k, v in sorted(globals().items())

@@ -7,9 +7,15 @@ Each run, on 15m bars:
   1. RPS v2 generation on 90d daily + 200x 1h/15m per tracked ticker
      (same rps_live as backtester --algo RPS): new patterns -> TRIGGERED
      rows in signal_log + one text (deduped vs open rows).
+  1d. Weekly-box breakout watch (data/wbox_watch.json, seeded by the
+     Friday scan): first print above a box top on session-paced RVOL >= 1.5
+     and not more than 3% above it -> one batched text + a WBOX-BO paper
+     row (stop = box mid); a print under the box low drops the watch.
   2. Open paper signals (signal_log rows with empty outcome_R): price crossing
-     entry -> ENTERED; stop touch -> STOPPED (-1R logged); +2R touch ->
-     informational "up +2R, trailing".
+     entry -> ENTERED; stop touch -> STOPPED (-1R logged); numeric target
+     touch -> TARGET (+R logged); WBOX rows close at market after 8 weeks;
+     +2R touch -> informational "up +2R, trailing". WBOX events batch into
+     one text per run.
 One text per ticker+event per day (data/intraday_state.json).
 Off-hours/holidays: exits silently (launchd fires 24/7 on a 900s interval).
 Free-data caveat: Yahoo 15m prints lag ~15 min; fine for paper, not for HFT.
@@ -41,6 +47,9 @@ from simple_scan import drop_forming, load_pool  # noqa: E402
 from simple_scan import rsi_window_pass, setup_row  # noqa: E402
 from market_calendar import add_trading_days, market_open, pt_now  # noqa: E402
 from market_calendar import trading_gap  # noqa: E402
+from weekly_box import breakout_decisions, breakout_text  # noqa: E402
+from weekly_box import load_watch, prune_watch, save_watch  # noqa: E402
+from weekly_box import wbox_row  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, "data", "signal_log.csv")
@@ -55,6 +64,9 @@ EMA_WRSI_MIN = 55.0       # mirrors --wrsi-min (weekly regime gate)
 EMA_ATR_MULT = 1.0        # proximity band mirrors --atr-mult
 EMA_IGNORE_DAYS = 5       # ignores last this many TRADING days at most
 EMA_ALERT_GAP = 3         # re-alert only after this many TRADING days
+WBOX_TIME_DAYS = 56       # WBOX paper rows close at market after 8 weeks
+TEXT_COLS = ("ticker", "strategy", "side", "target", "grade", "timeframe",
+             "status", "exit_reason", "regime", "news_flag", "notes")
 
 
 def load_state() -> dict:
@@ -70,6 +82,32 @@ def save_state(s: dict):
     s["date"] = dt.date.today().isoformat()
     with open(STATE, "w") as f:
         json.dump(s, f)
+
+
+def read_log(path: str) -> pd.DataFrame:
+    """signal_log with its free-text columns forced to object dtype. An
+    all-empty column (exit_reason before the first stop) otherwise reads
+    back as float64 and the first string write raises TypeError — that
+    killed every 15-min run from 10/07 to 10/09 at the stop branch."""
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    log = pd.read_csv(path)
+    for c in TEXT_COLS:
+        if c in log.columns:
+            log[c] = log[c].astype(object)
+    if "outcome_R" in log.columns:
+        log["outcome_R"] = pd.to_numeric(log["outcome_R"], errors="coerce")
+    return log
+
+
+def session_elapsed(now=None) -> float:
+    """Fraction of the 06:30-13:00 PT session elapsed, floored at 0.1 so
+    an opening print is judged on paced volume, 1.0 after the close."""
+    now = now or pt_now()
+    mins = now.hour * 60 + now.minute - (6 * 60 + 30)
+    if mins >= 390:
+        return 1.0
+    return max(mins / 390.0, 0.1)
 
 
 def ema_batch_text(tickers: list) -> str:
@@ -149,25 +187,39 @@ def main() -> int:
             return 0  # holiday: silent
 
     import yfinance as yf
-    log = pd.read_csv(LOG) if os.path.exists(LOG) else pd.DataFrame()
+    today = dt.date.today()
+    log = read_log(LOG)
     open_tr = log[log["outcome_R"].isna()] if len(log) else log
     wl = pd.read_csv(WATCH) if os.path.exists(WATCH) else pd.DataFrame()
     if len(wl):
         wl = wl[wl["date"] == wl["date"].max()]
-    syms = sorted(set(open_tr["ticker"].tolist() if len(open_tr) else []) |
-                  set(wl["ticker"].tolist() if len(wl) else []))
-    if not syms:
+    strat = (open_tr["strategy"].astype(str) if len(open_tr)
+             else pd.Series(dtype=str))
+    rps_open = (open_tr[~strat.str.startswith("WBOX")] if len(open_tr)
+                else open_tr)
+    wb_open = (open_tr[strat.str.startswith("WBOX")] if len(open_tr)
+               else open_tr)
+    syms = sorted(set(rps_open["ticker"].tolist() if len(rps_open) else [])
+                  | set(wl["ticker"].tolist() if len(wl) else []))
+    # weekly-box names ride one light daily fetch (stage 1d below), never
+    # the 15m/RPS downloads here — RPS keeps its own pool
+    watch = prune_watch(load_watch(), today)
+    wb_syms = sorted(set(watch) | set(
+        wb_open["ticker"].tolist() if len(wb_open) else []))
+    if not syms and not wb_syms:
         return 0
-    px = yf.download(syms, period="1d", interval="15m", auto_adjust=True,
-                     progress=False, threads=True, group_by="ticker")
     bars = {}
-    for t in syms:
-        try:
-            h = flat(pick(px, t)).dropna(subset=["Close"])
-            if len(h):
-                bars[t] = h
-        except Exception:
-            continue
+    if syms:
+        px = yf.download(syms, period="1d", interval="15m",
+                         auto_adjust=True, progress=False, threads=True,
+                         group_by="ticker")
+        for t in syms:
+            try:
+                h = flat(pick(px, t)).dropna(subset=["Close"])
+                if len(h):
+                    bars[t] = h
+            except Exception:
+                continue
 
     cfg = load_config()
     chans = [c.strip() for c in a.channels.split(",")]
@@ -190,17 +242,20 @@ def main() -> int:
     # 60-bar floor, so the window is sized in trading bars, not days).
     import yfinance as yf
     rps_new = 0
-    try:
-        dl = yf.download(syms, period="90d", interval="1d", auto_adjust=True,
-                         progress=False, threads=True, group_by="ticker")
-        h1r = yf.download(syms, period="1mo", interval="1h",
-                          auto_adjust=True, progress=False, threads=True,
-                          group_by="ticker")
-        m15r = yf.download(syms, period="1mo", interval="15m",
-                           auto_adjust=True, progress=False, threads=True,
-                           group_by="ticker")
-    except Exception:
-        dl = None
+    dl = None
+    if syms:  # RPS keeps its own pool: box names never enter here
+        try:
+            dl = yf.download(syms, period="90d", interval="1d",
+                             auto_adjust=True, progress=False, threads=True,
+                             group_by="ticker")
+            h1r = yf.download(syms, period="1mo", interval="1h",
+                              auto_adjust=True, progress=False,
+                              threads=True, group_by="ticker")
+            m15r = yf.download(syms, period="1mo", interval="15m",
+                               auto_adjust=True, progress=False,
+                               threads=True, group_by="ticker")
+        except Exception:
+            dl = None
     if dl is not None:
         open_keys = set()
         if len(log):
@@ -410,42 +465,151 @@ def main() -> int:
           f"{ema_ign} ignored, {ema_muted} muted "
           f"(stage1 {len(cand)}/{len(pool)}, {n_rh} rh-remote, "
           f"daily {src})", flush=True)
-    # 2. open paper signals
+    # 1d. weekly-box breakout watch: every Friday box (all tiers) sits in
+    # data/wbox_watch.json for four weeks; the first print above the box
+    # top on session-paced RVOL >= 1.5 pages (never more than 3% above
+    # it) and books a WBOX-BO paper row with the stop at the box mid. A
+    # print under the box low drops the watch. One light daily fetch
+    # covers the watch plus the marks for the open WBOX rows.
+    wb_prints, wb_avg = {}, {}
+    if wb_syms:
+        try:
+            px1 = batched_download(wb_syms, period="1d", interval="1d")
+        except Exception:
+            px1 = None
+        for t in wb_syms:
+            if px1 is not None:
+                try:
+                    f1 = px1[t] if isinstance(
+                        px1.columns, pd.MultiIndex) else px1
+                    f1 = f1.dropna(subset=["Close"])
+                    if len(f1):
+                        wb_prints[t] = (float(f1["Close"].iloc[-1]),
+                                        float(f1["Open"].iloc[-1]),
+                                        float(f1["Volume"].iloc[-1]))
+                except Exception:
+                    pass
+            try:
+                h = drop_forming(load_bars(t).dropna(subset=["Close"]),
+                                 today)
+                if len(h) >= 20:
+                    wb_avg[t] = float(h["Volume"].tail(20).mean())
+            except Exception:
+                pass
+    pages, broke, chased = breakout_decisions(
+        watch, wb_prints, wb_avg, today, session_elapsed())
+    dirty = False
+    for p in pages:
+        t = p["ticker"]
+        watch[t]["paged"] = today.isoformat()
+        new_idx = (log.index.max() + 1) if len(log) else 0
+        log = pd.concat([log, pd.DataFrame([wbox_row(
+            t, p["lower"], p["upper"], p["last"], today, p["grade"],
+            strategy="WBOX-BO",
+            note=f"tier={p['tier']} rvol={p['rvol']:.1f}")],
+            index=[new_idx])])
+        dirty = True
+    for t in broke:
+        watch[t]["done"] = f"broke down {today.isoformat()}"
+    for t in chased:
+        watch[t]["done"] = f"chased {today.isoformat()}"
+    if pages or broke or chased:
+        save_watch(watch)
+    if pages:
+        once(f"wbox-bo:{today.isoformat()}:{pt_now().strftime('%H:%M')}",
+             breakout_text(pages), "WBOX")
+    print(f"intraday WBOX: {len(pages)} breakouts, {len(broke)} broke "
+          f"down, {len(chased)} chased, {len(watch)} on watch, "
+          f"{len(wb_open)} open paper rows", flush=True)
+    # 2. open paper signals: RPS rows mark off the 15m tape, WBOX rows off
+    # the daily print; a numeric target closes a row as a win (RPS rows
+    # carry "-" and trail per algo); WBOX rows also close at market after
+    # WBOX_TIME_DAYS. WBOX events batch into one text per run.
+    wb_events: list = []
     for idx, r in open_tr.iterrows():
         t = r["ticker"]
-        if t not in bars:
+        if t in bars:
+            last = float(bars[t]["Close"].iloc[-1])
+        elif t in wb_prints:
+            last = wb_prints[t][0]
+        else:
             continue
-        last = float(bars[t]["Close"].iloc[-1])
         d = 1 if r["side"] == "long" else -1
         entry, stop = float(r["entry"]), float(r["stop"])
+        is_wb = str(r["strategy"]).startswith("WBOX")
         if r["status"] in ("TRIGGERED", "CONFIRMED"):
             # pre-entry invalidation first: stop touched before entry fills
             dead = (last <= stop) if d == 1 else (last >= stop)
             if dead:
                 log.at[idx, "status"] = "INVALIDATED"
                 log.at[idx, "exit_reason"] = "pre-entry stop touch"
+                dirty = True
                 once(f"invalid:{t}:{r['date']}",
                      f"INVALIDATED {t}: stop {stop} touched before entry "
                      f"(last {last:.2f}) — setup dead, no trade", t)
             elif (last >= entry) if d == 1 else (last <= entry):
                 log.at[idx, "status"] = "ENTERED"
                 log.at[idx, "entry"] = round(last, 2)
+                dirty = True
                 once(f"entered:{t}:{r['date']}",
                      f"ENTERED {t} {r['side']} @ {last:.2f} "
                      f"(stop {stop}) — paper", t)
         elif r["status"] == "ENTERED":
             entry = float(r["entry"])
             risk = abs(entry - stop)
+            if risk <= 0:
+                continue
             rpnl = (last - entry) / risk * d
+            try:
+                tgt = float(r["target"])
+            except (TypeError, ValueError):
+                tgt = None
+            try:
+                age = (today - dt.date.fromisoformat(str(r["date"]))).days
+            except ValueError:
+                age = 0
             if (last <= stop) if d == 1 else (last >= stop):
                 log.at[idx, "outcome_R"] = -1.0
                 log.at[idx, "exit_reason"] = "stop"
-                once(f"stopped:{t}:{r['date']}",
-                     f"STOPPED {t}: -1R @ {last:.2f} — logged", t)
+                dirty = True
+                if is_wb:
+                    wb_events.append(f"{t} stopped -1R @ {last:.2f}")
+                else:
+                    once(f"stopped:{t}:{r['date']}",
+                         f"STOPPED {t}: -1R @ {last:.2f} — logged", t)
+            elif tgt is not None and ((last >= tgt) if d == 1
+                                      else (last <= tgt)):
+                won = round((tgt - entry) / risk * d, 2)
+                log.at[idx, "outcome_R"] = won
+                log.at[idx, "exit_reason"] = "target"
+                dirty = True
+                if is_wb:
+                    wb_events.append(f"{t} target +{won:.1f}R @ {last:.2f}")
+                else:
+                    once(f"target:{t}:{r['date']}",
+                         f"TARGET {t}: +{won:.1f}R @ {last:.2f} — logged",
+                         t)
+            elif is_wb and age >= WBOX_TIME_DAYS:
+                log.at[idx, "outcome_R"] = round(rpnl, 2)
+                log.at[idx, "exit_reason"] = "time"
+                dirty = True
+                wb_events.append(f"{t} 8w time stop {rpnl:+.1f}R "
+                                 f"@ {last:.2f}")
             elif rpnl >= 2.0:
-                once(f"up2r:{t}:{r['date']}",
-                     f"{t} up +2R @ {last:.2f}, trailing per algo — paper", t)
-    if fired or rps_new:
+                key = f"up2r:{t}:{r['date']}"
+                if is_wb:
+                    if key not in state:
+                        state[key] = True
+                        dirty = True
+                        wb_events.append(f"{t} up +2R @ {last:.2f}")
+                else:
+                    once(key, f"{t} up +2R @ {last:.2f}, trailing per "
+                         f"algo — paper", t)
+    if wb_events:
+        once(f"wbox-track:{today.isoformat()}:"
+             f"{pt_now().strftime('%H:%M')}",
+             "WBOX paper:\n" + "\n".join(wb_events), "WBOX")
+    if fired or rps_new or dirty:
         log.to_csv(LOG, index=False)
         save_state(state)
     print(f"intraday: {len(fired)} texts", flush=True)

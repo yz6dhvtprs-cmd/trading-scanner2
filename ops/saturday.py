@@ -34,6 +34,10 @@ def main() -> int:
     lines = [f"# Saturday review {today}", ""]
     base = pd.read_csv(RESULTS)
     base_exp = base.groupby(["strategy", "side"])["test_expectancy_R"].mean()
+    # strategies results.csv doesn't know: baselines from the 2026-10-09
+    # weekly-box replay (1,418 alerts). WBOX = Friday BUY-zone paper
+    # entries, stop at the box low; WBOX-BO = breakout entries, stop mid.
+    replay_base = {("WBOX", "long"): 0.13, ("WBOX-BO", "long"): 0.07}
 
     if os.path.exists(LOG):
         log = pd.read_csv(LOG)
@@ -51,7 +55,7 @@ def main() -> int:
             last = grp.tail(20)
             n = len(last)
             live_exp = last["outcome_R"].mean()
-            bl = float(base_exp.get((s, d), 0.0))
+            bl = float(base_exp.get((s, d), replay_base.get((s, d), 0.0)))
             news_n = int(last["news_flag"].fillna("").astype(bool).sum()) \
                 if "news_flag" in last else 0
             verdict = "HOLD"

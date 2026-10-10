@@ -138,10 +138,40 @@ python algos/consolidation.py --ticker NVDA --days 5 --tf 1h --n 4 --width 1.0 -
 Anchor week sets the box; the next weeks keep their bodies (open+close)
 inside it — wicks may poke out;
 week n+3 scores live at noon (holiday fallback: last daily close).
-Alert needs price above weekly EMA20 + MACD bull above 0; above-EMA10
-names lead the text, EMA20-only names follow, no repeats. Same-box
+Alert needs price above weekly EMA20 + MACD bull above 0. Same-box
 refires suppress (one alert per grind, state in
 `weekly_box_state.json`). Window span configurable (`--weeks 8`).
+
+The text has three sections (2026-10-09 replay of 1,418 paged alerts,
+Jul-2025..Sep-2026, both halves of a time split agree — per-alert table
+in `research/_cache/wbox_replay.csv`, gitignored):
+
+- **BUY zone** — above EMA10, EMA10 rising, print in the upper 40% of
+  the box. 37–39% reached +1 box height before the box low (15% for
+  bottom-of-box names). Lines read `DELL A*`: grade A = box ≤ 1.3
+  weekly ATRs AND inside-week volume below the anchor week's (53–60%),
+  B+ = one of the two, B = neither; `*` = weekly MACD histogram rising.
+  Each BUY name books a `WBOX` paper row in `data/signal_log.csv`
+  (entry = Friday print, stop = box low, target = box top + box height,
+  8-week time stop) so the Saturday review grades it; a Saturday
+  demotion to C (paused) keeps the names in the text, stops the booking.
+- **Watch (above EMA10)** — lower in the box, or EMA10 flat.
+- **Only above EMA20** — 7% win when bought inside; watch for the break.
+
+Every alerted box (all tiers) goes on four-week breakout watch in
+`data/wbox_watch.json`: the 15-min intraday loop pages the first print
+above the box top on session-paced RVOL ≥ 1.5 and not more than 3%
+above it (a quiet break waits, a chased one is dropped, a print under
+the box low drops the watch) and books a `WBOX-BO` paper row with the
+stop at the box midpoint. Replay: 61% of such breaks reached +1 box
+height (70% from BUY boxes); about half dip back under the top within
+four weeks, so the midpoint stop, not the top, is the line.
+
+`--replay` and `--on` score each week exactly as the Friday run saw it:
+the eval week is the forming week and only the bars before it are
+completed. (Counting the eval week as completed AND as the print scored
+a 3-week pattern; it matched 7 of 17 live alerts on 10/02, this
+convention matches 15.) Replay/`--on` lines carry `tier/grade`.
 
 ```
 python algos/weekly_box.py --ticker DELL
@@ -153,7 +183,8 @@ python algos/weekly_box.py --scan --no-refire --channels dry   # Friday live pat
 
 The Friday live path scans the master+screener union via
 `screener.scan_pool()` (weeklies are derived from 2y dailies, so thin
-Friday tapes like PFG's can't print a wrong box low).
+Friday tapes like PFG's can't print a wrong box low). Dry runs write
+nothing: no refire state, no watch file, no paper rows.
 
 ## Monday screener (06:00 PT)
 
@@ -186,12 +217,12 @@ under `universe/`. Scheduled via `run_scan.sh screener` on the Monday
 ## Tests (all offline)
 
 ```
-python algos/test_weekly_box.py      # 16: box, gates, fallback, refire, text shape, union
+python algos/test_weekly_box.py      # 23: box, gates, tiers/grades, breakout watch, paper rows, replay window
 python algos/test_consolidation.py   # 8: gates, veto, B divergence, run grouping, A-only
 python algos/test_daily_cache.py     # 13: rotation, forming bars, resync, timeframes, tz, derived weeklies
 python algos/test_screener.py        # 5: rvol, cap band, symbols, name filter, rotation
 python algos/test_simple_scan.py     # 24: gates, pages, replay
-python algos/test_intraday.py        # 12: batch text, live-touch branches
+python algos/test_intraday.py        # 14: batch text, live-touch branches, log dtypes, RVOL pacing
 python algos/test_market_calendar.py # 7
 python algos/test_inbox.py           # inbox replay
 ```
