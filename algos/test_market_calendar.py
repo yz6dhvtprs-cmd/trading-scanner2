@@ -64,6 +64,30 @@ def test_add_trading_days_skips_labor_day():
     assert add_trading_days(dt.date(2026, 9, 4), 5) == dt.date(2026, 9, 14)
 
 
+def test_good_friday_known_dates():
+    # regression: the Easter computus had f,g = divmod(8b+13, 25); every
+    # year landed on the wrong Friday (2026 read Apr 17, actual Apr 3)
+    from market_calendar import _good_friday, is_open
+    assert _good_friday(2024) == dt.date(2024, 3, 29)
+    assert _good_friday(2025) == dt.date(2025, 4, 18)
+    assert _good_friday(2026) == dt.date(2026, 4, 3)
+    assert _good_friday(2027) == dt.date(2027, 3, 26)
+    assert not is_open(dt.date(2026, 4, 3))
+    assert is_open(dt.date(2026, 4, 17))
+
+
+def test_pt_now_is_dst_aware():
+    from market_calendar import pt_now
+    now = pt_now()
+    assert str(now.tzinfo) == "America/Los_Angeles"
+    # July is PDT (-7), January is PST (-8): a fixed offset fails one of them
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+    la = ZoneInfo("America/Los_Angeles")
+    assert _dt.datetime(2026, 7, 1, 12, tzinfo=la).utcoffset() == _dt.timedelta(hours=-7)
+    assert _dt.datetime(2026, 12, 1, 12, tzinfo=la).utcoffset() == _dt.timedelta(hours=-8)
+
+
 TESTS = [v for k, v in sorted(globals().items())
          if k.startswith("test_") and callable(v)]
 

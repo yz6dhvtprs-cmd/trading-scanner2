@@ -1,4 +1,57 @@
-# Pending / follow-ups (as of Fri 2026-10-09)
+# Pending / follow-ups (as of Sun 2026-10-11)
+
+## Shipped 2026-10-11 (options execution layer, shadow)
+- **`docs/strategies/EXECUTION.md`** — the strategy for taking funnel
+  trades as single-leg options via the Robinhood MCP, synthesized from a
+  three-design panel + two judges over four verified studies (SQ exit
+  sweep, entry mechanics, earnings veto, IV/chain liquidity). Key calls:
+  SQ exits stay 2R/20 fixed; next-open entries (every pullback limit lost
+  on TEST); no earnings veto; stock stop governs; resting GTC `stop_limit`;
+  option win rate ≈ 42%; shadow-only below $2,500.
+- **`algos/execution.py`** + 13 tests; `.claude/skills/fnl-exec/SKILL.md`
+  (the 15-minute executor runbook); premarket ENTRY intents, loop EXIT
+  intents + heartbeat alarm; Saturday option-book block; `data/exec/`.
+- **`algos/earnings.py`** (+9 tests, 200-name cache) from the study.
+- **Calendar fixes**: Good Friday was wrong every year; `pt_now()` was a
+  fixed UTC-7 (would shift the session an hour after 2026-11-01). FNL
+  paper time stop aligned to the backtest's bar-20 close.
+
+## To verify with one contract (S1, after shadow)
+- Whether a take-profit limit can co-rest next to the day `stop_market`;
+  the stop's trigger reference (mark/last/bid); whether `get_accounts`
+  exposes a day-trade counter.
+- Review-alert allowlist starts empty: collect codes in shadow.
+- The scheduled headless session (`com.trade.fnlexec`, 14 slots/day):
+  watch `logs/fnlexec-<date>.log` for usage-limit refusals; a missed
+  morning slot leaves open positions without a day stop until the next run.
+
+## User decisions taken 2026-10-11 (in EXECUTION.md)
+- Resting stop = day-only `stop_market`, re-placed every morning (nothing
+  rests overnight). Bootstrap sizing min(5% E, $250) stays until the user
+  asks for flat. `regime.bull_only` on. `earnings.entry_min_sessions` 0.
+- `data/exec/config.json` (gitignored, local only): agentic account and
+  `notify_to` set by the user; `armed` false.
+
+## Shipped 2026-10-10 (swing funnel)
+- **`algos/funnel.py`** — pool (top 200 by $vol) → watch flags → four
+  setup families (PB/BO verbatim from algo.json, SQ squeeze release,
+  RC undercut reclaim) → next-open fills → trail/target/time
+  management. Spec + evidence: `docs/strategies/FUNNEL.md`.
+- **Backtest** (`--backtest`, 5,299 trades, TRAIN/TEST): SQ long B+
+  (49% win, +0.19R, PF 1.41, both halves); RC paused (C); BO long
+  negative in this window (kept B+, Saturday arbitrates).
+- **Wiring**: premarket slot runs the scan (refreshes the daily cache
+  itself); intraday stage 1e books fills (`FNL fills:` text) and the
+  tracker manages `FNL-*` rows (`FNL paper:` text); Saturday baselines.
+- First live premarket run: Mon 2026-10-12 06:05 PT.
+
+## To verify by hand (2026-10-10)
+- **Watch-pool size**: 62/200 on the first dry scan (score ≥ 1.5). If
+  the text feels busy, raise `WATCH_MIN` to 2.0 (25 names).
+- **SQ exits**: +2R / 20 bars were set a priori; sweep 1.5R / 2.5R /
+  trail with TRAIN locked before changing.
+- **Earnings veto**: not implemented for the funnel (SPECS.md asks for
+  one); needs an offline calendar source.
 
 ## Shipped 2026-10-09 (weekly-box refinement)
 - **Tiers + grades on the Friday text** (`algos/weekly_box.py`): BUY

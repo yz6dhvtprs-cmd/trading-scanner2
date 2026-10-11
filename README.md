@@ -186,6 +186,67 @@ The Friday live path scans the master+screener union via
 Friday tapes like PFG's can't print a wrong box low). Dry runs write
 nothing: no refire state, no watch file, no paper rows.
 
+## Swing funnel (premarket 06:05 PT, fills in the 15-min loop)
+
+Pool → watch → setup → fill → manage, on completed daily bars
+(`algos/funnel.py`, spec and evidence in `docs/strategies/FUNNEL.md`).
+Pool = top 200 of the scan union by 20-day dollar volume (≥ $15). Watch
+flags: squeeze, flat tight base, pullback zone, spring / failed-break
+(+ RS extreme and volume dry-up as modifiers). Four setup families with
+a level, a risk and an exit: PB pullback and BO breakout (algo.json
+masks verbatim), SQ squeeze release (new: 49% win, +0.19R, PF 1.41 on
+both halves of the 2025-26 split) and RC undercut reclaim (paused:
+marginal and 30+/week). Fills book at the next open within 1 ATR of the
+level; B+ setups are texted, B books paper rows silently, C never
+books. The tracker handles stop / target / chandelier trail / time stop
+and sends one `FNL paper:` text per run; Saturday grades `FNL-*` rows.
+
+```
+python algos/funnel.py --ticker NVDA                 # flags + last setups
+python algos/funnel.py --scan --channels dry         # premarket path, dry
+python algos/funnel.py --backtest --save research/_cache/funnel_trades.csv
+python algos/funnel.py --watch
+```
+
+State: `data/funnel_watch.json` (gitignored). Logs: `logs/funnel-<date>.log`.
+
+## Options execution layer (shadow until armed)
+
+`docs/strategies/EXECUTION.md` is the strategy for taking the funnel's
+trades as single-leg options through the Robinhood MCP: expiry (nearest
+monthly ≥ 49 DTE), strike (MCP delta 0.55–0.75, most liquid), the stock
+stop as the governing stop with a resting GTC `stop_limit`, +2R / 20-bar
+exits, planned-loss sizing in equity tiers (shadow below $2,500; one
+contract fits 1% of SQ signals at $1k, 22% at $5k, 47% at $25k), the
+settled liquidity gate and the every-15-minute executor runbook. Expected
+option-level win rate ≈ 42% vs the stock's 49%.
+
+- Loop side (`algos/execution.py`, no broker access): the premarket scan
+  writes ENTRY intents for today's texted SQ-long setups, the 15-min loop
+  writes EXIT intents (stop / target / time / dte) and alarms the owner when
+  the executor heartbeat is stale. State under `data/exec/` (gitignored):
+  `config.json` (user: `armed`, `account_number`, `notify_to`), `intents.json`,
+  `ledger.json`, `trades.csv`, `heartbeat.json`, `halt`.
+- Session side: `/fnl-exec` (`.claude/skills/fnl-exec/SKILL.md`) is one
+  idempotent run against the MCP — reconcile, exits, resting day stops
+  (`stop_market`, GFD, re-placed each morning), entries inside 06:33–06:50
+  PT, persist, text. **Scheduled**: `com.trade.fnlexec` (launchd) runs
+  `run_scan.sh fnlexec` → headless `claude -p` at 06:33, 06:48 and then
+  every 30 min to 12:48 PT on market days (`logs/fnlexec-<date>.log`);
+  `./ops/agents.sh status` shows it with the other agents. `/loop 15m
+  /fnl-exec` from an interactive session is the denser manual alternative.
+  Shadow mode (synthetic fills at the ask, exits at the bid) until
+  `armed: true`; `regime.bull_only` is on; bootstrap sizing is
+  min(5% E, $250) per trade.
+- Saturday prints the option book's `option_R` next to the paired paper
+  `stock_R` and names the disarm condition.
+
+```
+python algos/execution.py --init-config   # write data/exec/config.json (armed=false)
+python algos/execution.py --status        # config, intents, ledger, trades summary
+python algos/test_execution.py            # 13 offline tests
+```
+
 ## Monday screener (06:00 PT)
 
 SPY+QQQ (517) is master and is never touched here. A separate adds list
@@ -223,6 +284,10 @@ python algos/test_daily_cache.py     # 13: rotation, forming bars, resync, timef
 python algos/test_screener.py        # 5: rvol, cap band, symbols, name filter, rotation
 python algos/test_simple_scan.py     # 24: gates, pages, replay
 python algos/test_intraday.py        # 14: batch text, live-touch branches, log dtypes, RVOL pacing
+python algos/test_funnel.py          # 12: causal features, each family, fills, trail, texts, rows
+python algos/test_execution.py       # 13: ids, expiry, MCP-quote pick, price map, sizing, ladders, exits, state
+python algos/test_earnings.py        # 9: dates cache helpers (offline)
+python algos/test_market_calendar.py # 9: includes the Good Friday and DST regressions
 python algos/test_market_calendar.py # 7
 python algos/test_inbox.py           # inbox replay
 ```

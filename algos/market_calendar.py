@@ -54,7 +54,8 @@ def _good_friday(year: int) -> dt.date:
     a = year % 19
     b, c = divmod(year, 100)
     d, e = divmod(b, 4)
-    f, g = divmod(b * 8 + 13, 25)
+    f = (b + 8) // 25          # Meeus/Jones/Butcher: not divmod(8b+13, 25),
+    g = (b - f + 1) // 3        # which put Good Friday on the wrong Friday every year
     h = (19 * a + b - d - g + 15) % 30
     i, k = divmod(c, 4)
     l = (32 + 2 * e + 2 * i - h - k) % 7
@@ -69,7 +70,10 @@ def is_open(day: dt.date) -> bool:
 
 
 def pt_now():
-    return dt.datetime.now(dt.timezone(dt.timedelta(hours=-7)))
+    """Wall clock in America/Los_Angeles (DST-aware: a fixed UTC-7 shifted
+    the whole session window an hour after 2026-11-01)."""
+    from zoneinfo import ZoneInfo
+    return dt.datetime.now(ZoneInfo("America/Los_Angeles"))
 
 
 def market_open(now=None) -> bool:
@@ -104,7 +108,7 @@ def add_trading_days(day: dt.date, n: int) -> dt.date:
 def afterhours(now: dt.datetime | None = None) -> bool:
     """True outside the 06:30-13:00 PT session window or on closed days.
     PT wall clock, matching the runner's intraday gate."""
-    now = now or dt.datetime.now(dt.timezone(dt.timedelta(hours=-7)))
+    now = now or pt_now()
     if not is_open(now.date()):
         return True
     mins = now.hour * 60 + now.minute

@@ -17,6 +17,7 @@ import sys
 import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "algos"))
 RESULTS = os.path.join(ROOT, "backtest", "results.csv")
 LOG = os.path.join(ROOT, "data", "signal_log.csv")
 OVERRIDES = os.path.join(ROOT, "data", "grade_overrides.csv")
@@ -37,7 +38,11 @@ def main() -> int:
     # strategies results.csv doesn't know: baselines from the 2026-10-09
     # weekly-box replay (1,418 alerts). WBOX = Friday BUY-zone paper
     # entries, stop at the box low; WBOX-BO = breakout entries, stop mid.
-    replay_base = {("WBOX", "long"): 0.13, ("WBOX-BO", "long"): 0.07}
+    replay_base = {("WBOX", "long"): 0.13, ("WBOX-BO", "long"): 0.07,
+                   # funnel families (2026-10-10 backtest; PB/BO carry
+                   # algo.json's published TEST values)
+                   ("FNL-SQ", "long"): 0.19, ("FNL-SQ", "short"): 0.00,
+                   ("FNL-PB", "long"): 0.25, ("FNL-BO", "long"): 0.59}
 
     if os.path.exists(LOG):
         log = pd.read_csv(LOG)
@@ -72,6 +77,27 @@ def main() -> int:
                 verdict = f"DEMOTE {cur_g} -> {new_g}"
             lines.append(f"- {s} {d}: n={n} live_exp={live_exp:+.2f}R "
                          f"baseline={bl:+.2f}R news={news_n} => {verdict}")
+
+    # options execution layer (docs/strategies/EXECUTION.md): option_R next
+    # to the paired paper stock_R; execution drag is the only auto-disarm
+    try:
+        from execution import trades_summary  # noqa: E402
+        ts = trades_summary()
+        if ts:
+            lines.append("\nOptions execution layer (data/exec/trades.csv):")
+            for mode, s in ts.items():
+                lines.append(
+                    f"- {mode}: n={s['n']} win={s['win_pct']}% "
+                    f"option_R={s['option_R']:+.2f} stock_R={s['stock_R']:+.2f} "
+                    f"fidelity_err={s['fidelity_err']:+.2f} "
+                    f"slip in/out={s['slip_entry']}/{s['slip_exit']}")
+                if (mode == "live" and s["n"] >= 10
+                        and s["last10_option_R"] < -0.3
+                        and s["last10_stock_R"] > 0):
+                    lines.append("  DISARM: execution drag (last-10 option_R "
+                                 "< -0.3 while stock_R > 0) -> set armed=false")
+    except Exception as e:
+        lines.append(f"\nOptions execution layer: unavailable ({e})")
 
     # universe age
     try:

@@ -11,11 +11,15 @@ Each run, on 15m bars:
      Friday scan): first print above a box top on session-paced RVOL >= 1.5
      and not more than 3% above it -> one batched text + a WBOX-BO paper
      row (stop = box mid); a print under the box low drops the watch.
+  1e. Swing-funnel fills (data/funnel_watch.json, seeded by the premarket
+     scan): today's setups book at the open within 1 ATR of the level and
+     never through the setup stop -> FNL-* paper rows + one batched text.
   2. Open paper signals (signal_log rows with empty outcome_R): price crossing
      entry -> ENTERED; stop touch -> STOPPED (-1R logged); numeric target
-     touch -> TARGET (+R logged); WBOX rows close at market after 8 weeks;
-     +2R touch -> informational "up +2R, trailing". WBOX events batch into
-     one text per run.
+     touch -> TARGET (+R logged); WBOX rows close at market after 8 weeks,
+     FNL rows after their own time stop, FNL trail rows ratchet a
+     chandelier stop; +2R touch -> informational "up +2R, trailing". WBOX
+     and FNL events each batch into one text per run.
 One text per ticker+event per day (data/intraday_state.json).
 Off-hours/holidays: exits silently (launchd fires 24/7 on a 900s interval).
 Free-data caveat: Yahoo 15m prints lag ~15 min; fine for paper, not for HFT.
@@ -50,6 +54,15 @@ from market_calendar import trading_gap  # noqa: E402
 from weekly_box import breakout_decisions, breakout_text  # noqa: E402
 from weekly_box import load_watch, prune_watch, save_watch  # noqa: E402
 from weekly_box import wbox_row  # noqa: E402
+from funnel import TEXT_GRADES, fill_decisions, fills_text  # noqa: E402
+from funnel import fnl_plan, fnl_row, trail_stop  # noqa: E402
+from funnel import load_watch as load_funnel  # noqa: E402
+from funnel import log_rows as log_funnel_rows  # noqa: E402
+from funnel import save_watch as save_funnel  # noqa: E402
+from execution import HEARTBEAT as EXEC_HB, INTENTS as EXEC_INTENTS  # noqa: E402
+from execution import LEDGER as EXEC_LEDGER, alarms as exec_alarms  # noqa: E402
+from execution import exit_intents, load_config as exec_config  # noqa: E402
+from execution import load_json as exec_load, write_intents  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG = os.path.join(ROOT, "data", "signal_log.csv")
@@ -98,6 +111,18 @@ def read_log(path: str) -> pd.DataFrame:
     if "outcome_R" in log.columns:
         log["outcome_R"] = pd.to_numeric(log["outcome_R"], errors="coerce")
     return log
+
+
+def fnl_time_due(gap: int, time_bars: int, now) -> bool:
+    """funnel.simulate exits a time-stopped trade at the CLOSE of bar
+    signal+time_bars, i.e. trading_gap(fill, today) == time_bars - 1 late
+    in that session. Earlier the tracker fired at gap >= time_bars (the
+    next session's open — one bar late vs the backtest). Due when that
+    session's last-hour clock has arrived, or any later session."""
+    if gap >= time_bars:
+        return True
+    late = now.hour * 60 + now.minute >= 12 * 60 + 30
+    return gap == time_bars - 1 and late
 
 
 def session_elapsed(now=None) -> float:
@@ -195,17 +220,25 @@ def main() -> int:
         wl = wl[wl["date"] == wl["date"].max()]
     strat = (open_tr["strategy"].astype(str) if len(open_tr)
              else pd.Series(dtype=str))
-    rps_open = (open_tr[~strat.str.startswith("WBOX")] if len(open_tr)
-                else open_tr)
-    wb_open = (open_tr[strat.str.startswith("WBOX")] if len(open_tr)
-               else open_tr)
+    managed = strat.str.match(r"^(WBOX|FNL)")  # box + funnel paper rows
+    rps_open = open_tr[~managed] if len(open_tr) else open_tr
+    wb_open = open_tr[managed] if len(open_tr) else open_tr
     syms = sorted(set(rps_open["ticker"].tolist() if len(rps_open) else [])
                   | set(wl["ticker"].tolist() if len(wl) else []))
-    # weekly-box names ride one light daily fetch (stage 1d below), never
-    # the 15m/RPS downloads here — RPS keeps its own pool
+    # box and funnel names ride one light daily fetch (stages 1d/1e
+    # below), never the 15m/RPS downloads here — RPS keeps its own pool
     watch = prune_watch(load_watch(), today)
-    wb_syms = sorted(set(watch) | set(
-        wb_open["ticker"].tolist() if len(wb_open) else []))
+    fst = load_funnel()
+    fn_due = [p for p in fst.get("pending", [])
+              if p.get("fill_date") == today.isoformat()
+              and not p.get("done") and not p.get("paused")]
+    # the executor's open option positions ride the same daily fetch so
+    # their EXIT intents can be written even after the paper row closed
+    ex_ledger = exec_load(EXEC_LEDGER, {})
+    ex_open = [p["ticker"] for p in (ex_ledger.get("positions") or {}).values()
+               if p.get("status") == "open"]
+    wb_syms = sorted(set(watch) | set(p["ticker"] for p in fn_due) | set(ex_open)
+                     | set(wb_open["ticker"].tolist() if len(wb_open) else []))
     if not syms and not wb_syms:
         return 0
     bars = {}
@@ -521,11 +554,64 @@ def main() -> int:
     print(f"intraday WBOX: {len(pages)} breakouts, {len(broke)} broke "
           f"down, {len(chased)} chased, {len(watch)} on watch, "
           f"{len(wb_open)} open paper rows", flush=True)
-    # 2. open paper signals: RPS rows mark off the 15m tape, WBOX rows off
-    # the daily print; a numeric target closes a row as a win (RPS rows
-    # carry "-" and trail per algo); WBOX rows also close at market after
-    # WBOX_TIME_DAYS. WBOX events batch into one text per run.
+    # 1e. funnel fills: the premarket scan's setups fill at today's open
+    # within 1 ATR of the level and never through the setup stop. B+ and
+    # up text, B books silently, C (paused) never reaches here.
+    fills, invalid = fill_decisions(fn_due, wb_prints, today)
+    fn_rows = [fnl_row(f, today) for f in fills]
+    n_booked = log_funnel_rows(fn_rows) if fn_rows else 0
+    keys = {(f["ticker"], f["family"], f["side"]): "filled" for f in fills}
+    keys.update({(p["ticker"], p["family"], p["side"]): why
+                 for p, why in invalid})
+    if keys:
+        for p in fst.get("pending", []):
+            k = (p["ticker"], p["family"], p["side"])
+            if k in keys and p.get("fill_date") == today.isoformat():
+                p["done"] = keys[k]
+        save_funnel(fst)
+    tf = [f for f in fills if f["grade"] in TEXT_GRADES]
+    ti = [(p, w) for p, w in invalid if p["grade"] in TEXT_GRADES]
+    if tf or ti:
+        once(f"fnl-fill:{today.isoformat()}:{pt_now().strftime('%H:%M')}",
+             fills_text(tf, ti), "FNL")
+    print(f"intraday FNL: {len(fn_due)} due, {len(fills)} filled "
+          f"({n_booked} booked), {len(invalid)} invalid", flush=True)
+    # 1f. execution layer (docs/strategies/EXECUTION.md): EXIT intents for the
+    # executor session's open option positions off this run's print (stop /
+    # target / time / dte, same ids the session derives itself), and an
+    # owner-only alarm when its heartbeat is stale with positions or intents
+    # pending. The loop never calls the broker.
+    try:
+        now_pt = pt_now().replace(tzinfo=None)
+        ecfg = exec_config()
+        xs = exit_intents(ex_ledger, wb_prints, today, now_pt)
+        if xs:
+            write_intents([], xs, today)
+        pend = sum(1 for i in exec_load(EXEC_INTENTS, {}).get("intents", [])
+                   if i.get("kind") == "ENTRY" and not i.get("done"))
+        for msg in exec_alarms(ex_ledger, exec_load(EXEC_HB, {}), pend, now_pt,
+                               ecfg):
+            key = f"exec-alarm:{today.isoformat()}:{now_pt.strftime('%H')}"
+            if key not in state:
+                state[key] = True
+                dirty = True
+                print(msg, flush=True)
+                if ecfg.get("notify_to"):
+                    for r in alert(msg, chans, cfg, title="EXEC",
+                                   only=str(ecfg["notify_to"])):
+                        print("  ", r, flush=True)
+        print(f"intraday EXEC: {len(xs)} exit intents, {len(ex_open)} open "
+              f"option positions, {pend} entry intents pending", flush=True)
+    except Exception as e:  # the paper tracker never waits on the exec layer
+        print(f"intraday EXEC: skipped ({type(e).__name__}: {e})", flush=True)
+    # 2. open paper signals: RPS rows mark off the 15m tape, WBOX/FNL rows
+    # off the daily print; a numeric target closes a row as a win (RPS
+    # rows carry "-" and trail per algo); WBOX rows close at market after
+    # WBOX_TIME_DAYS, FNL rows after their own time stop (trading days)
+    # and FNL trail rows ratchet a chandelier stop off the daily cache.
+    # WBOX and FNL events each batch into one text per run.
     wb_events: list = []
+    fn_events: list = []
     for idx, r in open_tr.iterrows():
         t = r["ticker"]
         if t in bars:
@@ -537,6 +623,28 @@ def main() -> int:
         d = 1 if r["side"] == "long" else -1
         entry, stop = float(r["entry"]), float(r["stop"])
         is_wb = str(r["strategy"]).startswith("WBOX")
+        is_fn = str(r["strategy"]).startswith("FNL")
+        plan = fnl_plan(r["notes"]) if is_fn else {"trail": None,
+                                                   "time": None}
+        if is_fn and plan["trail"] and r["status"] == "ENTERED":
+            # chandelier off completed bars since entry plus today's print
+            try:
+                h = drop_forming(load_bars(t).dropna(subset=["Close"]),
+                                 today)
+                since = h[h.index.date > dt.date.fromisoformat(
+                    str(r["date"]))]
+                ext = (max(float(since["High"].max()), last) if d == 1
+                       else min(float(since["Low"].min()), last)) \
+                    if len(since) else last
+                atr_now = float(ema_ind(h)["atr"].iloc[-1])
+                new_stop = round(trail_stop(r["side"], stop, ext, atr_now,
+                                            plan["trail"]), 2)
+            except Exception:
+                new_stop = stop
+            if (new_stop > stop) if d == 1 else (new_stop < stop):
+                log.at[idx, "stop"] = new_stop
+                stop = new_stop
+                dirty = True
         if r["status"] in ("TRIGGERED", "CONFIRMED"):
             # pre-entry invalidation first: stop touched before entry fills
             dead = (last <= stop) if d == 1 else (last >= stop)
@@ -568,12 +676,17 @@ def main() -> int:
                 age = (today - dt.date.fromisoformat(str(r["date"]))).days
             except ValueError:
                 age = 0
+            events = fn_events if is_fn else wb_events
             if (last <= stop) if d == 1 else (last >= stop):
-                log.at[idx, "outcome_R"] = -1.0
-                log.at[idx, "exit_reason"] = "stop"
+                # a ratcheted trail stop books the locked-in R, not -1
+                got = round((last - entry) / risk * d, 2) if (
+                    is_fn and plan["trail"]) else -1.0
+                log.at[idx, "outcome_R"] = got
+                log.at[idx, "exit_reason"] = "trail" if got != -1.0 else "stop"
                 dirty = True
-                if is_wb:
-                    wb_events.append(f"{t} stopped -1R @ {last:.2f}")
+                if is_wb or is_fn:
+                    events.append(f"{t} {'trail' if got != -1.0 else 'stopped'}"
+                                  f" {got:+.1f}R @ {last:.2f}")
                 else:
                     once(f"stopped:{t}:{r['date']}",
                          f"STOPPED {t}: -1R @ {last:.2f} — logged", t)
@@ -583,25 +696,27 @@ def main() -> int:
                 log.at[idx, "outcome_R"] = won
                 log.at[idx, "exit_reason"] = "target"
                 dirty = True
-                if is_wb:
-                    wb_events.append(f"{t} target +{won:.1f}R @ {last:.2f}")
+                if is_wb or is_fn:
+                    events.append(f"{t} target +{won:.1f}R @ {last:.2f}")
                 else:
                     once(f"target:{t}:{r['date']}",
                          f"TARGET {t}: +{won:.1f}R @ {last:.2f} — logged",
                          t)
-            elif is_wb and age >= WBOX_TIME_DAYS:
+            elif (is_wb and age >= WBOX_TIME_DAYS) or (
+                    is_fn and plan["time"] and fnl_time_due(
+                        trading_gap(dt.date.fromisoformat(str(r["date"])),
+                                    today), plan["time"], pt_now())):
                 log.at[idx, "outcome_R"] = round(rpnl, 2)
                 log.at[idx, "exit_reason"] = "time"
                 dirty = True
-                wb_events.append(f"{t} 8w time stop {rpnl:+.1f}R "
-                                 f"@ {last:.2f}")
+                events.append(f"{t} time stop {rpnl:+.1f}R @ {last:.2f}")
             elif rpnl >= 2.0:
                 key = f"up2r:{t}:{r['date']}"
-                if is_wb:
+                if is_wb or is_fn:
                     if key not in state:
                         state[key] = True
                         dirty = True
-                        wb_events.append(f"{t} up +2R @ {last:.2f}")
+                        events.append(f"{t} up +2R @ {last:.2f}")
                 else:
                     once(key, f"{t} up +2R @ {last:.2f}, trailing per "
                          f"algo — paper", t)
@@ -609,6 +724,10 @@ def main() -> int:
         once(f"wbox-track:{today.isoformat()}:"
              f"{pt_now().strftime('%H:%M')}",
              "WBOX paper:\n" + "\n".join(wb_events), "WBOX")
+    if fn_events:
+        once(f"fnl-track:{today.isoformat()}:"
+             f"{pt_now().strftime('%H:%M')}",
+             "FNL paper:\n" + "\n".join(fn_events), "FNL")
     if fired or rps_new or dirty:
         log.to_csv(LOG, index=False)
         save_state(state)
