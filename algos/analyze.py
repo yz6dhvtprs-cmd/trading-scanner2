@@ -404,7 +404,8 @@ def main() -> int:
         msg = f"ANALYZER {dt.datetime.now().strftime('%H:%M')}PT " \
               f"({len(lines)} updates):\n" + "\n".join(lines)
         print(msg, flush=True)
-        for res in alert(msg, chans, cfg, title="Trade updates"):
+        for res in alert(msg, chans, cfg, title="Trade updates",
+                         audience="owner"):
             print("  ", res, flush=True)
     else:
         print("analyzer: no state changes", flush=True)

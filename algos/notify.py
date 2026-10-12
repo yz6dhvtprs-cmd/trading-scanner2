@@ -129,8 +129,12 @@ def run_shortcut(name: str, text: str) -> str:
 
 
 def alert(text: str, channels: list, cfg: dict,
-          title: str = "Trade signal", only: str = "") -> list:
-    """only: send solely to recipients whose name/number contains this."""
+          title: str = "Trade signal", only: str = "",
+          audience: str = "all") -> list:
+    """only: send solely to recipients whose name/number contains this.
+    audience="owner": paper-trade tracking, watch lists, fills/stops,
+    system alarms -- sent ONLY to cfg["owner"] (nothing if unset).
+    audience="all": new long setups for subscribers."""
     results = []
     subs = cfg.get("subscribers", {})
     for ch in channels:
@@ -143,7 +147,10 @@ def alert(text: str, channels: list, cfg: dict,
             paused = cfg.get("paused", {})
             now = _dt.date.today().isoformat()
             numbers = sorted({d for d, _ in _recipients(cfg)})
-            if only:
+            if audience == "owner":
+                own = str(cfg.get("owner", "")).strip()
+                numbers = [d for d in numbers if own and d == own]
+            elif only:
                 o = only.lower()
                 numbers = [d for d in numbers
                            if o in d or o in subs.get(d, "").lower()]

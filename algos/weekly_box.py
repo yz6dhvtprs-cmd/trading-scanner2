@@ -653,10 +653,16 @@ def main() -> int:
                 [lbl for _, _, lbl in sorted(buy)], sorted(watch_names),
                 sorted(ema20), span=a.weeks, paused=paused)
             print(body, flush=True)
-            for r in alert(body, [c.strip() for c in
-                                  a.channels.split(",")], cfg,
-                           title="WBOX"):
+            chans = [c.strip() for c in a.channels.split(",")]
+            # owner: the full text (watch + EMA20 lists); subscribers:
+            # only the BUY-zone longs
+            for r in alert(body, chans, cfg, title="WBOX", audience="owner"):
                 print("  ", r, flush=True)
+            if buy:
+                sub = weekly_batch_text([lbl for _, _, lbl in sorted(buy)],
+                                        [], [], span=a.weeks, paused=paused)
+                for r in alert(sub, chans, cfg, title="WBOX"):
+                    print("  ", r, flush=True)
         return 0
     if a.on:
         from daily_cache import load  # noqa: E402

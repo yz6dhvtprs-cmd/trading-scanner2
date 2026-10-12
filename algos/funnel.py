@@ -747,14 +747,14 @@ def main() -> int:
         from notify import alert, load_config  # noqa: E402
         cfg = load_config()
         bodies = []
-        live = [p for p in st["pending"] if texted(p)]
+        live = [p for p in st["pending"] if texted(p) and p["side"] == "long"]
         if live:
-            bodies.append(setups_text(live, live[0]["fill_date"]))
+            bodies.append((setups_text(live, live[0]["fill_date"]), "all"))
         if st["watch"]:
-            bodies.append(watch_text(st["watch"], st["pool_n"]))
-        for body in bodies:
+            bodies.append((watch_text(st["watch"], st["pool_n"]), "owner"))
+        for body, aud in bodies:
             print(body, flush=True)
-            for r in alert(body, chans, cfg, title="FNL"):
+            for r in alert(body, chans, cfg, title="FNL", audience=aud):
                 print("  ", r, flush=True)
         return 0
     if not a.ticker:

@@ -259,11 +259,13 @@ def main() -> int:
     state = load_state()
     fired = []
 
-    def once(key, text, title):
+    def once(key, text, title, audience="owner"):
+        # subscribers get new LONG setups only; paper tracking, fills,
+        # stops and watch updates go to the owner
         if key in state:
             return
         print(text, flush=True)
-        for r in alert(text, chans, cfg, title=title):
+        for r in alert(text, chans, cfg, title=title, audience=audience):
             print("  ", r, flush=True)
         state[key] = True
         fired.append(key)
@@ -333,7 +335,8 @@ def main() -> int:
                      fmt_row({"grade": "B", "ticker": t, "side": side,
                               "state": st, "strategy": "RPS",
                               "variant": "rps-2step", "entry": entry,
-                              "stop": stop, "target": "-"}), t)
+                              "stop": stop, "target": "-"}), t,
+                     "all" if side == "long" else "owner")
     print(f"intraday RPS: {rps_new} new setups", flush=True)
     # 1c. EMA50+RSI40 scan over the full spy+qqq union, every run.
     # Alert only genuinely new triggers: suppressed if alerted within the
@@ -492,7 +495,7 @@ def main() -> int:
     if ema_hits:
         slot = pt_now().strftime("%H:%M")
         once(f"ema-batch:{today.isoformat()}:{slot}",
-             ema_batch_text(sorted(ema_hits)), "EMA")
+             ema_batch_text(sorted(ema_hits)), "EMA", "all")
     src = "refreshed" if sync.get("refreshed") else "local"
     print(f"intraday EMA: {ema_new} alerts ({ema_live} live-touch), "
           f"{ema_ign} ignored, {ema_muted} muted "
@@ -550,7 +553,7 @@ def main() -> int:
         save_watch(watch)
     if pages:
         once(f"wbox-bo:{today.isoformat()}:{pt_now().strftime('%H:%M')}",
-             breakout_text(pages), "WBOX")
+             breakout_text(pages), "WBOX", "all")
     print(f"intraday WBOX: {len(pages)} breakouts, {len(broke)} broke "
           f"down, {len(chased)} chased, {len(watch)} on watch, "
           f"{len(wb_open)} open paper rows", flush=True)
@@ -598,7 +601,7 @@ def main() -> int:
                 print(msg, flush=True)
                 if ecfg.get("notify_to"):
                     for r in alert(msg, chans, cfg, title="EXEC",
-                                   only=str(ecfg["notify_to"])):
+                                   audience="owner"):
                         print("  ", r, flush=True)
         print(f"intraday EXEC: {len(xs)} exit intents, {len(ex_open)} open "
               f"option positions, {pend} entry intents pending", flush=True)

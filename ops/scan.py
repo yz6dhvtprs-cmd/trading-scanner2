@@ -355,13 +355,15 @@ def main() -> int:
             if afterhours():
                 print("   (afterhours: logged, no text)", flush=True)
             else:
-                for res in alert(wmsg, chans, cfg, title="Watchlist"):
+                for res in alert(wmsg, chans, cfg, title="Watchlist",
+                                 audience="owner"):
                     print("  ", res)
 
     for r in rows:
         msg = fmt_row(r) + tag(r["ticker"])
         print(msg)
-        for res in alert(msg, chans, cfg, title=f"{r['ticker']} signal"):
+        for res in alert(msg, chans, cfg, title=f"{r['ticker']} signal",
+                         audience="all" if r["side"] == "long" else "owner"):
             print("  ", res)
         pd.DataFrame([{"date": dt.date.today().isoformat(),
                        "ticker": r["ticker"], "strategy": r["strategy"],
