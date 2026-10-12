@@ -255,8 +255,8 @@ def test_state_files_and_alarms():
     finally:
         ex.INTENTS, ex.TRADES = real
     now = dt.datetime(2026, 10, 13, 9, 0)
-    hb = {"last_run": "2026-10-13T08:30:00"}
-    assert ex.heartbeat_stale(hb, now) and not ex.heartbeat_stale({"last_run": "2026-10-13T08:50:00"}, now)
+    hb = {"last_run": "2026-10-13T08:15:00"}
+    assert ex.heartbeat_stale(hb, now) and not ex.heartbeat_stale({"last_run": "2026-10-13T08:30:00"}, now)
     ledger = {"positions": {"p": {"status": "open"}}}
     assert ex.alarms(ledger, hb, 0, now)[0].startswith("EXEC session down: 1 open")
     assert ex.alarms({"positions": {}}, hb, 0, now) == []

@@ -590,8 +590,14 @@ def main() -> int:
         xs = exit_intents(ex_ledger, wb_prints, today, now_pt)
         if xs:
             write_intents([], xs, today)
+        # pending = ENTRY intents still inside their window and not yet
+        # resolved by the session (the session records outcomes in the
+        # ledger, never in intents.json)
+        done = set((ex_ledger.get("intents") or {}).keys())
+        hm = now_pt.strftime("%H:%M")
         pend = sum(1 for i in exec_load(EXEC_INTENTS, {}).get("intents", [])
-                   if i.get("kind") == "ENTRY" and not i.get("done"))
+                   if i.get("kind") == "ENTRY" and i["intent_id"] not in done
+                   and hm <= (i.get("window_pt") or ["", "06:50"])[1])
         for msg in exec_alarms(ex_ledger, exec_load(EXEC_HB, {}), pend, now_pt,
                                ecfg):
             key = f"exec-alarm:{today.isoformat()}:{now_pt.strftime('%H')}"

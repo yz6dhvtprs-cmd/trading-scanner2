@@ -84,7 +84,7 @@ DEFAULT_CONFIG = {
     "pdt": {"entry_max_used": 2, "exempt_equity": 25000},
     "earnings": {"entry_min_sessions": 0, "expiry_after_report_days": 7},
     "regime": {"bull_only": True},  # user decision 2026-10-11
-    "stale": {"stock_quote_s": 60, "heartbeat_s": 1200},
+    "stale": {"stock_quote_s": 60, "heartbeat_s": 2400},  # session runs every 30 min
 }
 GRADE_RANK = {"A+": 0, "A": 1, "B+": 2, "B": 3, "C": 4}
 

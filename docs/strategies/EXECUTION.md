@@ -206,7 +206,7 @@ Idempotency: ids are deterministic and regenerable; the ledger is the dedupe sto
  "pdt": {"entry_max_used": 2, "exempt_equity": 25000},
  "earnings": {"entry_min_sessions": 0, "expiry_after_report_days": 7},
  "regime": {"bull_only": true},
- "stale": {"stock_quote_s": 60, "heartbeat_s": 1200}}
+ "stale": {"stock_quote_s": 60, "heartbeat_s": 2400}}
 ```
 
 ## 14. Known limits
