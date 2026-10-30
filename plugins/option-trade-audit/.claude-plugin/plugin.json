@@ -1,0 +1,8 @@
+{
+  "name": "option-trade-audit",
+  "version": "0.1.0",
+  "description": "Audit your own option trade history from your broker, learn which setups and habits made or lost money, and check every new trade against that record before you take it.",
+  "author": { "name": "yz6dhvtprs-cmd" },
+  "license": "MIT",
+  "keywords": ["options", "trading", "journal", "backtest", "robinhood"]
+}

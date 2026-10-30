@@ -1,0 +1,4 @@
+# your order history and P&L live here; never commit
+trade-audit-data/
+*.pyc
+__pycache__/

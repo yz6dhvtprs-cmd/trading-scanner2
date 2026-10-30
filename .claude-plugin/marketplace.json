@@ -1,0 +1,11 @@
+{
+  "name": "trading-scanner2",
+  "owner": { "name": "yz6dhvtprs-cmd" },
+  "plugins": [
+    {
+      "name": "option-trade-audit",
+      "source": "./plugins/option-trade-audit",
+      "description": "Audit your option trade history and gate new trades against it (trade-audit + trade-check skills)."
+    }
+  ]
+}
